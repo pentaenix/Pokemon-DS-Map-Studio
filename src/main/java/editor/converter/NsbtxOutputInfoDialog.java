@@ -23,7 +23,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
 import javax.swing.JLabel;
@@ -572,20 +571,7 @@ public class NsbtxOutputInfoDialog extends javax.swing.JDialog {
                         String filename = new File(pathSave).getName();
                         filename = Utils.removeExtensionFromPath(filename);
                         try {
-                            String converterPath = "converter/g3dcvtr.exe";
-                            String[] cmd;
-                            if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                                cmd = new String[]{converterPath, pathSave, "-etex", "-o", filename};
-                            } else {
-                                cmd = new String[]{"wine", converterPath, pathSave, "-etex", "-o", filename};
-                                // NOTE: wine call works only with relative path
-                            }
-
-                            if (!Files.exists(Paths.get(converterPath))) {
-                                throw new IOException();
-                            }
-
-                            Process p = new ProcessBuilder(cmd).start();
+                            Process p = G3dcvtr.processBuilderForTexture(file.getCanonicalPath(), filename).start();
 
                             BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
@@ -646,8 +632,8 @@ public class NsbtxOutputInfoDialog extends javax.swing.JDialog {
                             nFilesNotConverted++;
                             exportStatus = ConvertStatus.CONVERTER_NOT_FOUND_STATUS;
                             errorMsgs.set(nFilesProcessed,
-                                    "The program \"g3dcvtr.exe\" is not found in the \"converter\" folder.\n"
-                                            + "Put the program and its *.dll files in the folder and try again.");
+                                    "The program \"g3dcvtr.exe\" is not found (or Wine is missing on macOS/Linux).\n"
+                                            + "Put g3dcvtr.exe and its DLL files in converter/, and ensure Wine is in PATH.");
 
                         } catch (InterruptedException ex) {
                             nFilesNotConverted++;

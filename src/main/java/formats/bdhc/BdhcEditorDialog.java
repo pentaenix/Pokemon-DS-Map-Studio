@@ -15,7 +15,7 @@ import javax.swing.*;
 import javax.swing.GroupLayout;
 import javax.swing.border.*;
 import javax.swing.event.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 
 /**
  * @author Trifindo, JackHack96
@@ -332,7 +332,7 @@ public class BdhcEditorDialog extends JDialog {
         if (handler.getLastBdhcDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBdhcDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Terrain File (*.bdhc)", Bdhc.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Terrain File (*.bdhc)", Bdhc.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open");
         int returnVal = fc.showOpenDialog(this);
@@ -364,7 +364,7 @@ public class BdhcEditorDialog extends JDialog {
         if (handler.getLastBdhcDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBdhcDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Terrain File (*.bdhc)", Bdhc.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Terrain File (*.bdhc)", Bdhc.fileExtension));
         fc.setApproveButtonText("Save");
         fc.setDialogTitle("Save");
         int returnVal = fc.showOpenDialog(this);

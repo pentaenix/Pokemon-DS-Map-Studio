@@ -18,7 +18,7 @@ import java.io.IOException;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 
 import net.miginfocom.swing.*;
 import utils.Utils;
@@ -107,7 +107,7 @@ public class CollisionsEditorDialog extends JDialog {
         if (handler.getLastCollisionsDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastCollisionsDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Collision File (*.per)", Collisions.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Collision File (*.per)", Collisions.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open");
         int returnVal = fc.showOpenDialog(this);
@@ -136,7 +136,7 @@ public class CollisionsEditorDialog extends JDialog {
         if (handler.getLastCollisionsDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastCollisionsDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Collision File (*.per)", Collisions.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Collision File (*.per)", Collisions.fileExtension));
         fc.setApproveButtonText("Save");
         fc.setDialogTitle("Save");
         int returnVal = fc.showOpenDialog(this);

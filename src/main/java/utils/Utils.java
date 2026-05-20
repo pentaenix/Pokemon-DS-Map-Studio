@@ -534,14 +534,35 @@ public class Utils {
     }
 
     public static Cursor loadCursor(String path, Point hotSpot) {
-        Image img = Utils.loadTexImageAsResource(path);
-        if (img != null) {
-            return Toolkit.getDefaultToolkit().createCustomCursor(
-                    img,
-                    new Point(0, 0), "custom cursor");
-        } else {
+        boolean isMac = System.getProperty("os.name", "")
+                .toLowerCase(Locale.ROOT)
+                .contains("mac");
+
+        // On macOS, custom cursor creation can crash native AppKit if triggered
+        // from Swing class initialization / initComponents on AWT-EventQueue-0.
+        // Use default cursors for now. Do not call Toolkit.createCustomCursor.
+        if (isMac && !Boolean.getBoolean("pdsm.mac.customCursors")) {
+            System.out.println("[PDSM] Utils.loadCursor: using default cursor on macOS for " + path);
             return Cursor.getDefaultCursor();
         }
+
+        try {
+            Image img = Utils.loadTexImageAsResource(path);
+            if (img != null) {
+                Point safeHotSpot = hotSpot != null ? hotSpot : new Point(0, 0);
+                System.out.println("[PDSM] Utils.loadCursor: creating custom cursor " + path
+                        + " thread=" + Thread.currentThread().getName());
+                return Toolkit.getDefaultToolkit().createCustomCursor(
+                        img,
+                        safeHotSpot,
+                        "custom cursor");
+            }
+        } catch (Throwable t) {
+            System.err.println("[PDSM] Utils.loadCursor: failed for " + path);
+            t.printStackTrace();
+        }
+
+        return Cursor.getDefaultCursor();
     }
 
     public static boolean hasDuplicates(ArrayList<Integer> array) {

@@ -1129,6 +1129,22 @@ public class Tile {
         this.smallThumbnail = img;
     }
 
+    /** Sets OpenGL triangle mesh arrays (used when loading from RTPK RMesh). */
+    public void setGlTriMeshData(float[] vCoordsTri, float[] tCoordsTri, float[] nCoordsTri, float[] colorsTri,
+                                 ArrayList<Integer> textureIDs, ArrayList<Integer> texOffsetsTri) {
+        this.vCoordsTri = vCoordsTri;
+        this.tCoordsTri = tCoordsTri;
+        this.nCoordsTri = nCoordsTri;
+        this.colorsTri = colorsTri;
+        this.vCoordsQuad = null;
+        this.tCoordsQuad = null;
+        this.nCoordsQuad = null;
+        this.colorsQuad = null;
+        this.textureIDs = textureIDs != null ? textureIDs : new ArrayList<>();
+        this.texOffsetsTri = texOffsetsTri != null ? texOffsetsTri : new ArrayList<>();
+        this.texOffsetsQuad = new ArrayList<>();
+    }
+
     public void setWidth(int width) {
         this.width = width;
     }

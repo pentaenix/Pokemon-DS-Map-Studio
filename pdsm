@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# Pokemon DS Map Studio — thin wrapper around Gradle (macOS/Linux)
+set -e
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+LOGDIR="$ROOT/build/logs"
+RUN_JAR_LOG="$LOGDIR/run-jar-last.log"
+OPENAPP_LOG="$LOGDIR/openapp-last.log"
+
+mkdir -p "$LOGDIR"
+
+# When PDSM_FOCUS_LOG=1: full stream still goes to the log file; terminal shows only these matches.
+_PDSM_FOCUS_RGX='java\.version|os\.name|pdsm\.enableJoglMap|pdsm\.enableJoglTile|pdsm\.enableJoglTilesetRenderer|JOGL map preview enabled|JOGL tile preview enabled|MapDisplay wrapper|MapDisplayGL|MapDisplayGL\.reshape|TileDisplay wrapper|TileDisplayGL|TilesetRenderer|openMapWithDialog|JFileChooser|Downloads exists|Downloads item|selected file|file filter|tile-layout|UI: setVisible|UI: startup complete|Trace/BPT|Exception|Error|SIGTRAP|Must only be used from the main thread|^mouse |^wheel |viewport'
+
+MAC_APP="$ROOT/build/mac-dist/Pokemon DS Map Studio.app"
+MAC_LAUNCHER="$MAC_APP/Contents/MacOS/Pokemon DS Map Studio"
+
+# Run command with stdout/stderr copied to Terminal and appended to LOGFILE.
+# Honors pipefail exit status from JVM/launcher (not tee).
+# Without a tty, Java buffers heavily when piped—on macOS we wrap with `script`.
+_run_with_log() {
+    local logfile="$1"
+    shift
+    echo "────────────────────────────────────────────────────────────" >>"$logfile"
+    echo "$(date '+%Y-%m-%dT%H:%M:%S%z')  run:" >>"$logfile"
+    printf ' %q' "$@" >>"$logfile"
+    echo >>"$logfile"
+    echo "────────────────────────────────────────────────────────────" >>"$logfile"
+    mkdir -p "$(dirname "$logfile")"
+    echo "Streaming below; full log also at:" >&2
+    echo "  $logfile" >&2
+    echo "" >&2
+    set -o pipefail
+    local _ec
+    # Focused terminal: full log still appended via tee; grep exit must not fail the script.
+    if [[ "${PDSM_FOCUS_LOG:-0}" = "1" ]]; then
+        "$@" 2>&1 | tee -a "$logfile" | { grep --line-buffered -E "${_PDSM_FOCUS_RGX}" || true; }
+        _ec=${PIPESTATUS[0]}
+    # With a real TTY, skip `script` so the JVM is not nested—better Ctrl+C and fewer hangs. Use the
+    # script wrapper only when stdout is not a terminal (piped/CI), where Java buffers without a pty.
+    elif [[ "$(uname -s)" = Darwin ]] && [[ -z "${PDMS_NO_SCRIPT_PTYS:-}" ]] && command -v script >/dev/null 2>&1 && [[ ! -t 1 ]]; then
+        script -q /dev/null "$@" 2>&1 | tee -a "$logfile"
+        _ec=${PIPESTATUS[0]}
+    else
+        "$@" 2>&1 | tee -a "$logfile"
+        _ec=${PIPESTATUS[0]}
+    fi
+    return "${_ec:-1}"
+}
+
+usage() {
+    echo "Pokemon DS Map Studio" >&2
+    echo "" >&2
+    echo "From this folder in Terminal:" >&2
+    echo "  $0 build      Compile (on Mac also builds a double-clickable .app)" >&2
+    echo "  $0 run        Dev defaults: JOGL map+tile, runtime tileset thumbnails (full log: $RUN_JAR_LOG)" >&2
+    echo "  $0 run-jogl-map-focused        alias → same as run" >&2
+    echo "  $0 run-jogl-map-tile-focused   alias → same as run" >&2
+    echo "  $0 app        macOS: rebuild the Finder .app only" >&2
+    echo "  $0 openapp    macOS: run bundled .app → Terminal + $OPENAPP_LOG" >&2
+    echo "  $0 logs       Tail the last JAR run log (Ctrl+C to stop)" >&2
+    echo "" >&2
+    echo "Blank logs? Attach real tty: PDMS_NO_LOG=1 ./pdsm run  (skip tee)." >&2
+    echo "No line-buffering wrap:    PDMS_NO_STDBUF=1 ./pdsm run  (if stdbuf breaks)" >&2
+    echo "Skip glFinish (freeze fix): PDMS_SKIP_GL_FINISH=1 ./pdsm run" >&2
+    echo "Fallback (no JOGL flags):     PDSM_FALLBACK=1 ./pdsm run" >&2
+    echo "Disable JOGL map:             PDSM_DISABLE_JOGL_MAP=1 ./pdsm run" >&2
+    echo "Disable JOGL tile panel:      PDSM_DISABLE_JOGL_TILE=1 ./pdsm run" >&2
+    echo "Disable native Open Map (macOS): PDSM_DISABLE_NATIVE_FILE_DIALOG=1 ./pdsm run" >&2
+    echo "Filtered console only:  PDSM_FOCUS_LOG=1 ./pdsm run  (full log still at build/logs/run-jar-last.log)" >&2
+    echo "Map layout debug:       PDSM_TRACE_LAYOUT=1 ./pdsm run  (-Dpdsm.traceLayout=true)" >&2
+    echo "Detach terminal (bg job):  PDMS_BACKGROUND=1 ./pdsm run" >&2
+    echo "No script PTY:             PDMS_NO_SCRIPT_PTYS=1 ./pdsm run" >&2
+    echo "Other:  $0 clean | $0 --help" >&2
+    exit 1
+}
+
+print_help() {
+    echo "Pokemon DS Map Studio — Gradle helper"
+    echo ""
+    echo "Commands:"
+    echo "  run, launch   Build JAR if needed — dev defaults: JOGL map+tile, TilesetRenderer runtime;"
+    echo "                  full stream always at $RUN_JAR_LOG"
+    echo "  Fallback AWT:  PDSM_FALLBACK=1 ./pdsm run"
+    echo "  run-jogl-map-focused / run-jogl-map-tile-focused   aliases for ./pdsm run"
+    echo "  build         Full Gradle build; on macOS also runs jpackage → .app"
+    echo "  app           macOS: refresh the Finder .app"
+    echo "  openapp       macOS: run bundled .app — logs at:"
+    echo "                  $OPENAPP_LOG"
+    echo "  logs          tail -f run-jar-last.log"
+    echo "  clean         Remove build outputs"
+    echo ""
+    echo "Blank log file? JVM output is buffered when piped."
+    echo "  PDMS_NO_LOG=1 ./pdsm run           # best: true terminal"
+    echo "  PDMS_TRACE_VERBOSE=1 ./pdsm run   # [PDSM] JOGL/initComponents detail lines"
+    echo "  PDMS_NO_TRACE=1 ./pdsm run         # disable [PDSM] startup traces"
+    echo "  PDMS_SKIP_GL_FINISH=1 ./pdsm run   # if UI freezes after startup (glFinish hang on macOS)"
+    echo "  PDMS_BACKGROUND=1 ./pdsm run        # return shell prompt; log to build/logs/run-jar-last.log"
+    echo "  PDMS_NO_SCRIPT_PTYS=1 ./pdsm run    # fallback if script(1) misbehaves"
+    echo "  PDSM_FALLBACK=1 ./pdsm run           # no -Dpdsm.enableJoglMap/Tile (classic Swing panels)"
+    echo "  PDSM_DISABLE_JOGL_MAP=1 ./pdsm run"
+    echo "  PDSM_DISABLE_JOGL_TILE=1 ./pdsm run"
+    echo "  PDSM_DISABLE_NATIVE_FILE_DIALOG=1 ./pdsm run   # macOS: use Swing JFileChooser for Open Map"
+    echo "  PDSM_FOCUS_LOG=1 ./pdsm run          # filtered terminal (full log unchanged)"
+    echo "  PDSM_TRACE_MOUSE=1 ./pdsm run        # -Dpdsm.traceMouse=true (MapDisplayGL mouse/viewport traces)"
+    echo "  PDSM_TRACE_LAYOUT=1 ./pdsm run        # -Dpdsm.traceLayout=true (map container/map pref traces)"
+    echo "  ./pdsm run-jogl-map-focused            # alias"
+    echo "  ./pdsm run-jogl-map-tile-focused       # alias"
+    echo ""
+    echo "If the Dock icon bounces forever, skip Finder: use ./pdsm run."
+    echo ""
+    echo "Double-click app (macOS):"
+    echo "  $MAC_APP"
+    echo ""
+    echo "Skip creating the .app on build:  PDMS_SKIP_APP=1 ./pdsm build"
+}
+
+case "${1:-}" in
+    build)
+        shift
+        ./gradlew build "$@"
+        echo "" >&2
+        if [[ "$(uname -s)" = Darwin ]] && [[ -z "${PDMS_SKIP_APP:-}" ]]; then
+            echo "Building double-clickable app (Finder)…" >&2
+            ./gradlew packageMacApp -q
+            echo "" >&2
+            echo "Finder app: $MAC_APP" >&2
+            echo "For live logs prefer: ./pdsm run" >&2
+        else
+            echo "Build finished. Start with: ./pdsm run" >&2
+            if [[ "$(uname -s)" = Darwin ]] && [[ -n "${PDMS_SKIP_APP:-}" ]]; then
+                echo "(Skipped .app — unset PDMS_SKIP_APP to build it.)" >&2
+            fi
+        fi
+        ;;
+    app)
+        if [[ "$(uname -s)" != Darwin ]]; then
+            echo "The Finder .app target is only built on macOS." >&2
+            exit 1
+        fi
+        shift
+        ./gradlew jar packageMacApp "$@"
+        echo "App: $MAC_APP" >&2
+        ;;
+    logs)
+        if [[ ! -f "$RUN_JAR_LOG" ]]; then
+            echo "No log yet. Run ./pdsm run first." >&2
+            exit 1
+        fi
+        tail -n 120 "$RUN_JAR_LOG"
+        echo "" >&2
+        echo "(Following new lines — Ctrl+C to exit)" >&2
+        tail -f "$RUN_JAR_LOG"
+        ;;
+    openapp)
+        if [[ "$(uname -s)" != Darwin ]]; then
+            echo "openapp only works on macOS." >&2
+            exit 1
+        fi
+        if [[ ! -d "$MAC_APP" ]]; then
+            echo "No app bundle at: $MAC_APP" >&2
+            echo "Build it first: ./pdsm app   or   ./pdsm build" >&2
+            exit 1
+        fi
+        shift
+        launch="$MAC_LAUNCHER"
+        if [[ ! -x "$launch" ]]; then
+            launch="$(find "$MAC_APP/Contents/MacOS" -maxdepth 1 -type f -perm -111 2>/dev/null | head -1)"
+        fi
+        if [[ ! -x "$launch" ]]; then
+            echo "Launcher not found or not executable. Expected: $MAC_LAUNCHER" >&2
+            ls -la "$MAC_APP/Contents/MacOS" >&2 || true
+            exit 1
+        fi
+        echo "Clearing Finder quarantine (if any)…" >&2
+        xattr -rd com.apple.quarantine "$MAC_APP" 2>/dev/null || true
+        # jpackage launcher may hand off quickly; jar path run has richer logs — see ./pdsm run
+        : >"$OPENAPP_LOG"
+        _run_with_log "$OPENAPP_LOG" "$launch" "$@"
+        ;;
+    run-jogl-map-focused)
+        exec "$0" run "$@"
+        ;;
+    run-jogl-map-tile-focused)
+        exec "$0" run "$@"
+        ;;
+    run|launch)
+        shift
+
+        JAR="$ROOT/build/libs/pokemon-ds-map-studio.jar"
+        ./gradlew jar -q
+        if [[ ! -f "$JAR" ]]; then
+            echo "Expected JAR not found: $JAR" >&2
+            echo "Try: ./pdsm build" >&2
+            exit 1
+        fi
+
+        echo "Starting Pokemon DS Map Studio…" >&2
+        if [[ -z "${PDMS_BACKGROUND:-}" ]]; then
+            echo "Note: Foreground mode — this terminal waits until you quit the app (Ctrl+C). Not a hang." >&2
+            echo "      Want your shell prompt back?  PDMS_BACKGROUND=1 ./pdsm run" >&2
+            echo "      Live logs: tail -f $RUN_JAR_LOG   Less buffering: PDMS_NO_LOG=1 ./pdsm run" >&2
+        else
+            echo "Background mode — shell returns immediately; JVM logs append to:" >&2
+            echo "  $RUN_JAR_LOG" >&2
+        fi
+
+        JAVA_CMD=( java -showversion )
+        if [[ "$(uname -s)" = Darwin ]]; then
+            # Swing/AWT + JOGL in Swing: do not use -XstartOnFirstThread (breaks Dock/window show).
+            JAVA_CMD+=(
+                -Djava.awt.headless=false
+                -Dsun.java2d.metal=false
+                -Dapple.awt.UIElement=false
+                -Dapple.laf.useScreenMenuBar=false
+                -Xdock:name="Pokemon DS Map Studio"
+                -Dapple.awt.application.name="Pokemon DS Map Studio"
+            )
+        fi
+        [[ -n "${PDMS_TRACE_VERBOSE:-}" ]] && JAVA_CMD+=( -Dpdsm.trace.verbose=true )
+        [[ -n "${PDMS_NO_TRACE:-}" ]] && JAVA_CMD+=( -Dpdsm.trace=false )
+        [[ -n "${PDMS_SKIP_GL_FINISH:-}" ]] && JAVA_CMD+=( -Dpdsm.skip.glFinish=true )
+        [[ -n "${PDSM_TRACE_LAYOUT:-}" ]] && JAVA_CMD+=( -Dpdsm.traceLayout=true )
+        [[ -n "${PDSM_TRACE_MOUSE:-}" ]] && JAVA_CMD+=( -Dpdsm.traceMouse=true )
+
+        # Dev defaults unless PDSM_FALLBACK=1
+        if [[ -z "${PDSM_FALLBACK:-}" ]]; then
+            if [[ "${PDSM_DISABLE_JOGL_MAP:-0}" != "1" ]]; then
+                JAVA_CMD+=( -Dpdsm.enableJoglMap=true )
+                echo "[pdsm] JOGL map preview enabled" >&2
+            fi
+            if [[ "${PDSM_DISABLE_JOGL_TILE:-0}" != "1" ]]; then
+                JAVA_CMD+=( -Dpdsm.enableJoglTile=true )
+                echo "[pdsm] JOGL tile preview enabled" >&2
+            fi
+            if [[ "${PDSM_DISABLE_JOGL_MAP:-0}" != "1" ]] || [[ "${PDSM_DISABLE_JOGL_TILE:-0}" != "1" ]]; then
+                JAVA_CMD+=( --add-opens=java.desktop/sun.awt=ALL-UNNAMED )
+            fi
+            if [[ "${PDSM_DISABLE_TILESET_RENDERER:-0}" != "1" ]]; then
+                JAVA_CMD+=( -Dpdsm.enableJoglTilesetRendererRuntime=true )
+            else
+                JAVA_CMD+=( -Dpdsm.enableJoglTilesetRendererRuntime=false )
+            fi
+            if [[ "$(uname -s)" = Darwin ]] && [[ -z "${PDSM_FALLBACK:-}" ]] && [[ "${PDSM_DISABLE_NATIVE_FILE_DIALOG:-0}" != "1" ]]; then
+                JAVA_CMD+=( -Dpdsm.useNativeFileDialog=true )
+            fi
+        fi
+
+        JAVA_CMD+=( -jar "$JAR" )
+
+        # Line-buffer stderr/stdout when piping to tee so [PDSM] traces appear immediately (requires stdbuf, e.g. brew install coreutils).
+        if command -v stdbuf >/dev/null 2>&1 && [[ -z "${PDMS_NO_STDBUF:-}" ]]; then
+            JAVA_CMD=( stdbuf -oL -eL "${JAVA_CMD[@]}" )
+        fi
+
+        : >"$RUN_JAR_LOG"
+        if [[ -n "${PDMS_BACKGROUND:-}" ]]; then
+            nohup "${JAVA_CMD[@]}" "$@" >>"$RUN_JAR_LOG" 2>&1 &
+            echo "Started PID=$! (stop: kill \$! or pkill -f pokemon-ds-map-studio.jar)" >&2
+            exit 0
+        fi
+        # Focus mode needs the tee pipeline so the full log is always written.
+        if [[ -n "${PDMS_NO_LOG:-}" ]] && [[ "${PDSM_FOCUS_LOG:-0}" != "1" ]]; then
+            "${JAVA_CMD[@]}" "$@"
+        else
+            _run_with_log "$RUN_JAR_LOG" "${JAVA_CMD[@]}" "$@"
+        fi
+        ;;
+    clean)
+        shift
+        exec ./gradlew clean "$@"
+        ;;
+    -h|--help|help)
+        print_help
+        ;;
+    *)
+        usage
+        ;;
+esac

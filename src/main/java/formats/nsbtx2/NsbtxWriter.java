@@ -6,11 +6,11 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 
 import utils.Utils;
+import editor.converter.G3dcvtr;
 
 /**
  * @author Trifindo
@@ -49,21 +49,7 @@ public class NsbtxWriter {
             System.out.println("File exists!");
             String filename = new File(imdPath).getName();
             filename = Utils.removeExtensionFromPath(filename);
-            String converterPath = "converter/g3dcvtr.exe";
-            String[] cmd;
-            if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                cmd = new String[]{converterPath, imdPath, "-etex", "-o", filename};
-            } else {
-                cmd = new String[]{"wine", converterPath, imdPath, "-etex", "-o", filename};
-                // NOTE: wine call works only with relative path
-            }
-
-            if (!Files.exists(Paths.get(converterPath))) {
-                System.out.println("Converter not found!");
-                throw new IOException();
-            }
-
-            Process p = new ProcessBuilder(cmd).start();
+            Process p = G3dcvtr.processBuilderForTexture(file.getCanonicalPath(), filename).start();
 
             BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 

@@ -11,7 +11,7 @@ import javax.swing.border.LineBorder;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ListSelectionEvent;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
@@ -189,7 +189,7 @@ public class BacksoundEditorDialog extends JDialog {
         if (handler.getLastBdhcDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBdhcDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Backsound File (*.bgs)", Backsound.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Backsound File (*.bgs)", Backsound.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open Background Sound File");
         int returnVal = fc.showOpenDialog(this);
@@ -216,7 +216,7 @@ public class BacksoundEditorDialog extends JDialog {
         if (handler.getLastBdhcDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBdhcDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Backsound File (*.bgs)", Backsound.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Backsound File (*.bgs)", Backsound.fileExtension));
         fc.setApproveButtonText("Save");
         fc.setDialogTitle("Save Background Sound File");
         int returnVal = fc.showOpenDialog(this);

@@ -9,7 +9,7 @@ import javax.swing.border.LineBorder;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ListSelectionEvent;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
@@ -290,7 +290,7 @@ public class AnimationEditorDialog extends JDialog {
         if (handler.getLastNsbtxDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open NSBTX File");
         int returnVal = fc.showOpenDialog(this);
