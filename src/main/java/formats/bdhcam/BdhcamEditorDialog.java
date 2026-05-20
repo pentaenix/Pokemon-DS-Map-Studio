@@ -18,7 +18,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import javax.swing.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 import javax.swing.plaf.basic.BasicComboBoxRenderer;
 
 import net.miginfocom.swing.*;
@@ -251,7 +251,7 @@ public class BdhcamEditorDialog extends JDialog {
         if (handler.getLastBdhcDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBdhcDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Terrain File (*.bdhcam)", Bdhcam.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Terrain File (*.bdhcam)", Bdhcam.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open BDHCAM");
         int returnVal = fc.showOpenDialog(this);
@@ -277,7 +277,7 @@ public class BdhcamEditorDialog extends JDialog {
         if (handler.getLastBdhcDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBdhcDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Camera File (*.bdhcam)", Bdhcam.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Camera File (*.bdhcam)", Bdhcam.fileExtension));
         fc.setApproveButtonText("Save");
         fc.setDialogTitle("Save BDHCAM");
         int returnVal = fc.showOpenDialog(this);

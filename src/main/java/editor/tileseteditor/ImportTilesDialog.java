@@ -9,6 +9,7 @@ import javax.swing.border.*;
 
 import editor.tileselector.*;
 import tileset.TilesetRenderer;
+import utils.StartupTrace;
 
 import java.util.ArrayList;
 import javax.swing.JOptionPane;
@@ -63,13 +64,17 @@ public class ImportTilesDialog extends JDialog {
     public void init(Tileset tileset) {
         this.tileset = tileset;
 
-        TilesetRenderer tr = new TilesetRenderer(tileset);
-        try {
-            tr.renderTiles();
-        } catch (NullPointerException e) {
-            e.printStackTrace();
+        if (utils.TilesetRendererPolicy.isRuntimeEnabled()) {
+            TilesetRenderer tr = new TilesetRenderer(tileset);
+            try {
+                tr.renderTiles();
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+            tr.destroy();
+        } else {
+            StartupTrace.log("Skipping TilesetRenderer at ImportTilesDialog.init");
         }
-        tr.destroy();
 
         tileMultiSelector.init(tileset);
     }

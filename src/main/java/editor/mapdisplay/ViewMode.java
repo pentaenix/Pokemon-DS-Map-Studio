@@ -27,32 +27,32 @@ public abstract class ViewMode {
     public static ViewOrthoMode VIEW_ORTHO_MODE = new ViewOrthoMode();
     public static ViewHeightMode VIEW_HEIGHT_MODE = new ViewHeightMode();
 
-    public abstract void mousePressed(MapDisplay d, MouseEvent e);
+    public abstract void mousePressed(MapDisplayGL d, MouseEvent e);
 
-    public abstract void mouseReleased(MapDisplay d, MouseEvent e);
+    public abstract void mouseReleased(MapDisplayGL d, MouseEvent e);
 
-    public abstract void mouseDragged(MapDisplay d, MouseEvent e);
+    public abstract void mouseDragged(MapDisplayGL d, MouseEvent e);
 
-    public abstract void mouseMoved(MapDisplay d, MouseEvent e);
+    public abstract void mouseMoved(MapDisplayGL d, MouseEvent e);
 
-    public abstract void keyPressed(MapDisplay d, KeyEvent e);
+    public abstract void keyPressed(MapDisplayGL d, KeyEvent e);
 
-    public abstract void keyReleased(MapDisplay d, KeyEvent e);
+    public abstract void keyReleased(MapDisplayGL d, KeyEvent e);
 
-    public abstract void mouseWheelMoved(MapDisplay d, MouseWheelEvent e);
+    public abstract void mouseWheelMoved(MapDisplayGL d, MouseWheelEvent e);
 
-    public abstract void paintComponent(MapDisplay d, Graphics g);
+    public abstract void paintComponent(MapDisplayGL d, Graphics g);
 
-    public abstract void applyCameraTransform(MapDisplay d, GL2 gl);
+    public abstract void applyCameraTransform(MapDisplayGL d, GL2 gl);
 
-    public abstract void setCameraAtMap(MapDisplay d);
+    public abstract void setCameraAtMap(MapDisplayGL d);
 
     public abstract ViewID getViewID();
 
-    public abstract Vec3f[][] getFrustumPlanes(MapDisplay d);
+    public abstract Vec3f[][] getFrustumPlanes(MapDisplayGL d);
 
-    public abstract float getZNear(MapDisplay d);
+    public abstract float getZNear(MapDisplayGL d);
 
-    public abstract float getZFar(MapDisplay d);
+    public abstract float getZFar(MapDisplayGL d);
 
 }

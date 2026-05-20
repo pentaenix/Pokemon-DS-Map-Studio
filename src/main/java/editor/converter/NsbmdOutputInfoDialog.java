@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -445,41 +444,13 @@ public class NsbmdOutputInfoDialog extends javax.swing.JDialog {
                 ConvertStatus exportStatus;
 
                 try {
-                    String imdPath;
-                    if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                        imdPath = pathOpen;
-                    } else {
-                        String cwd = System.getProperty("user.dir"); // get current user directory
-                        imdPath = new File(cwd).toURI().relativize(new File(pathOpen).toPath().toRealPath().toUri()).getPath(); //this is some serious java shit
-                    }
-
+                    String absoluteImd = new File(pathOpen).getCanonicalPath();
                     String nsbPath = pathSave;
-                    String filename = new File(nsbPath).getName();
 
                     try {
-                        String converterPath = "converter/g3dcvtr.exe";
-                        String[] cmd;
-                        if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                            if (includeNsbtx) {
-                                cmd = new String[]{converterPath, imdPath, "-eboth", "-o", filename};
-                            } else {
-                                cmd = new String[]{converterPath, imdPath, "-emdl", "-o", filename};
-                            }
+                        String filename = new File(nsbPath).getName();
 
-                        } else {
-                            if (includeNsbtx) {
-                                cmd = new String[]{"wine", converterPath, imdPath, "-eboth", "-o", filename};
-                            } else {
-                                cmd = new String[]{"wine", converterPath, imdPath, "-emdl", "-o", filename};
-                            }
-                            // NOTE: wine call works only with relative path
-                        }
-
-                        if (!Files.exists(Paths.get(converterPath))) {
-                            throw new IOException();
-                        }
-
-                        Process p = new ProcessBuilder(cmd).start();
+                        Process p = G3dcvtr.processBuilderForModel(absoluteImd, filename, includeNsbtx).start();
 
                         BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
@@ -533,8 +504,8 @@ public class NsbmdOutputInfoDialog extends javax.swing.JDialog {
                         nFilesNotConverted++;
                         exportStatus = ConvertStatus.CONVERTER_NOT_FOUND_STATUS;
                         errorMsgs.set(nFilesProcessed,
-                                "The program \"g3dcvtr.exe\" is not found in the \"converter\" folder.\n"
-                                        + "Put the program and its *.dll files in the folder and try again.");
+                                "The program \"g3dcvtr.exe\" is not found (or Wine is missing on macOS/Linux).\n"
+                                        + "Put g3dcvtr.exe and its DLL files in converter/, and ensure Wine is in PATH.");
                     } catch (InterruptedException ex) {
                         nFilesNotConverted++;
                         exportStatus = ConvertStatus.INTERRUPT_ERROR_STATUS;

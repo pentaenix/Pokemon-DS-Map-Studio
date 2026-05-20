@@ -14,6 +14,7 @@ import tileset.TilesetRenderer;
 import editor.handler.MapEditorHandler;
 import formats.obj.ObjWriter;
 import editor.smartdrawing.SmartGrid;
+import utils.StartupTrace;
 import editor.smartdrawing.SmartGridEditable;
 import editor.vertexcolors.VColorEditorDialog;
 
@@ -37,7 +38,8 @@ import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
+import utils.TilesetRendererPolicy;
 
 import net.miginfocom.swing.*;
 
@@ -243,7 +245,7 @@ public class TilesetEditorDialog extends JDialog {
             if (handler.getLastTilesetDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("OBJ (*.obj)", "obj"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("OBJ (*.obj)", "obj"));
             fc.setMultiSelectionEnabled(true);
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Open");
@@ -357,7 +359,7 @@ public class TilesetEditorDialog extends JDialog {
             if (handler.getLastTilesetDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("Portable Network Graphics (*.PNG)", "png"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Portable Network Graphics (*.PNG)", "png"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Open");
             int returnVal = fc.showOpenDialog(this);
@@ -699,7 +701,7 @@ public class TilesetEditorDialog extends JDialog {
                 if (handler.getLastTileObjDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastTileObjDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("OBJ (*.obj)", "obj"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("OBJ (*.obj)", "obj"));
                 fc.setApproveButtonText("Save");
                 fc.setDialogTitle("Save tile as OBJ");
                 fc.setSelectedFile(new File(handler.getTileSelected().getObjFilename()));
@@ -742,7 +744,7 @@ public class TilesetEditorDialog extends JDialog {
                 if (handler.getLastTilesetDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("OBJ (*.obj)", "obj"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("OBJ (*.obj)", "obj"));
                 fc.setApproveButtonText("Open");
                 fc.setDialogTitle("Open OBJ");
                 int returnVal = fc.showOpenDialog(this);
@@ -817,7 +819,7 @@ public class TilesetEditorDialog extends JDialog {
         if (handler.getLastTilesetDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Pokemon DS Tileset (*.pdsts)", Tileset.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Pokemon DS Tileset (*.pdsts)", Tileset.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Select a Pokemon DS Map Studio Tileset");
         int returnVal = fc.showOpenDialog(this);
@@ -1257,6 +1259,11 @@ public class TilesetEditorDialog extends JDialog {
     }
 
     private void updateTileThumbnails(ArrayList<Integer> indicesTiles) {
+        if (!TilesetRendererPolicy.isRuntimeEnabled()) {
+            StartupTrace.log("Skipping TilesetRenderer at TilesetEditorDialog.updateTileThumbnails(indices)");
+            tileDisplay.requestUpdate();
+            return;
+        }
         GLContext context = tileDisplay.getContext();
 
         TilesetRenderer tr = new TilesetRenderer(handler.getTileset());
@@ -1296,7 +1303,7 @@ public class TilesetEditorDialog extends JDialog {
         if (handler.getLastTilesetDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Portable Network Graphics (*.PNG)", "png"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Portable Network Graphics (*.PNG)", "png"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open New Texture Image");
         int returnVal = fc.showOpenDialog(this);
@@ -1481,6 +1488,11 @@ public class TilesetEditorDialog extends JDialog {
     }
 
     private void updateTileThumbnail(int index) {
+        if (!TilesetRendererPolicy.isRuntimeEnabled()) {
+            StartupTrace.log("Skipping TilesetRenderer at TilesetEditorDialog.updateTileThumbnail");
+            tileDisplay.requestUpdate();
+            return;
+        }
         GLContext context = tileDisplay.getContext();
         TilesetRenderer tr = new TilesetRenderer(handler.getTileset());
         tr.renderTileThumbnail(index);
@@ -1489,6 +1501,11 @@ public class TilesetEditorDialog extends JDialog {
     }
 
     private void updateTileThumbnails(int start, int end) {
+        if (!TilesetRendererPolicy.isRuntimeEnabled()) {
+            StartupTrace.log("Skipping TilesetRenderer at TilesetEditorDialog.updateTileThumbnails(range)");
+            tileDisplay.requestUpdate();
+            return;
+        }
         GLContext context = tileDisplay.getContext();
         TilesetRenderer tr = new TilesetRenderer(handler.getTileset());
         for (int i = start; i < end; i++) {

@@ -8,6 +8,7 @@ import javax.swing.border.*;
 import javax.swing.event.*;
 
 import editor.converter.ConverterErrorDialog;
+import editor.converter.G3dcvtr;
 import editor.handler.MapEditorHandler;
 import formats.nsbtx.*;
 import formats.nsbtx2.exceptions.NsbtxTextureSizeException;
@@ -19,13 +20,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import javax.imageio.ImageIO;
 import javax.swing.DefaultListModel;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import net.miginfocom.swing.*;
@@ -328,7 +328,7 @@ public class NsbtxEditorDialog2 extends JDialog {
         if (handler.getLastNsbtxDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open NSBTX File");
         int returnVal = fc.showOpenDialog(this);
@@ -362,7 +362,7 @@ public class NsbtxEditorDialog2 extends JDialog {
             if (handler.getLastNsbtxDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("PNG (*.png)", "png"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("PNG (*.png)", "png"));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save Texture as PNG");
             int returnVal = fc.showOpenDialog(this);
@@ -401,7 +401,7 @@ public class NsbtxEditorDialog2 extends JDialog {
                 if (handler.getLastNsbtxDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("png (*.png)", "png"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("png (*.png)", "png"));
                 fc.setApproveButtonText("Open");
                 fc.setDialogTitle("Open PNG Image");
                 int returnVal = fc.showOpenDialog(this);
@@ -446,7 +446,7 @@ public class NsbtxEditorDialog2 extends JDialog {
                 if (handler.getLastNsbtxDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("png (*.png)", "png"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("png (*.png)", "png"));
                 fc.setApproveButtonText("Open");
                 fc.setDialogTitle("Open PNG Image");
                 fc.setMultiSelectionEnabled(true);
@@ -505,7 +505,7 @@ public class NsbtxEditorDialog2 extends JDialog {
             if (handler.getLastNsbtxDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("png (*.png)", "png"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("png (*.png)", "png"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Open PNG Image");
             int returnVal = fc.showOpenDialog(this);
@@ -542,7 +542,7 @@ public class NsbtxEditorDialog2 extends JDialog {
             if (handler.getLastNsbtxDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("png (*.png)", "png"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("png (*.png)", "png"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Open PNG Image");
             fc.setMultiSelectionEnabled(true);
@@ -629,7 +629,7 @@ public class NsbtxEditorDialog2 extends JDialog {
                 if (handler.getLastNsbtxDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("png (*.png)", "png"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("png (*.png)", "png"));
                 fc.setApproveButtonText("Open");
                 fc.setDialogTitle("Open PNG Image");
                 int returnVal = fc.showOpenDialog(this);
@@ -671,7 +671,7 @@ public class NsbtxEditorDialog2 extends JDialog {
             if (handler.getLastNsbtxDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("png (*.png)", "png"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("png (*.png)", "png"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Open PNG Image");
             fc.setMultiSelectionEnabled(true);
@@ -733,7 +733,7 @@ public class NsbtxEditorDialog2 extends JDialog {
         if (handler.getLastNsbtxDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Choose the NSBTX to import data from");
         int returnVal = fc.showOpenDialog(this);
@@ -845,7 +845,7 @@ public class NsbtxEditorDialog2 extends JDialog {
                 if (handler.getLastNsbtxDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastNsbtxDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
                 fc.setApproveButtonText("Save");
                 fc.setDialogTitle("Save NSBTX");
                 int returnVal = fc.showOpenDialog(this);
@@ -881,20 +881,7 @@ public class NsbtxEditorDialog2 extends JDialog {
             String filename = new File(imdPath).getName();
             filename = Utils.removeExtensionFromPath(filename);
             try {
-                String converterPath = "converter/g3dcvtr.exe";
-                String[] cmd;
-                if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                    cmd = new String[]{converterPath, imdPath, "-etex", "-o", filename};
-                } else {
-                    cmd = new String[]{"wine", converterPath, imdPath, "-etex", "-o", filename};
-                    // NOTE: wine call works only with relative path
-                }
-
-                if (!Files.exists(Paths.get(converterPath))) {
-                    throw new IOException();
-                }
-
-                Process p = new ProcessBuilder(cmd).start();
+                Process p = G3dcvtr.processBuilderForTexture(file.getCanonicalPath(), filename).start();
 
                 BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
@@ -953,8 +940,9 @@ public class NsbtxEditorDialog2 extends JDialog {
                 }
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this,
-                        "The program \"g3dcvtr.exe\" is not found in the \"converter\" folder.\n"
-                                + "Put the program and its *.dll files in the folder and try again.",
+                        "Could not run g3dcvtr.exe (converter/g3dcvtr.exe).\n"
+                                + "Put it and its DLL files in converter/.\n"
+                                + "On macOS/Linux install Wine so the Windows converter can run.",
                         "Converter not found",
                         JOptionPane.ERROR_MESSAGE);
             } catch (InterruptedException ex) {

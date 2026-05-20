@@ -50,7 +50,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 
 import nitroreader.nsbca.NSBCA;
 import nitroreader.nsbca.NSBCAreader;
@@ -240,7 +240,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Add a new NSBMD Building Model");
             int returnVal = fc.showOpenDialog(this);
@@ -267,7 +267,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Select the new NSBMD Building Model (material order will be deleted)");
             int returnVal = fc.showOpenDialog(this);
@@ -295,7 +295,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save the NSBMD Building Model");
             try {//TODO: Replace this with some index bounds cheking?
@@ -482,7 +482,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Add a new Animation");
             int returnVal = fc.showOpenDialog(this);
@@ -507,7 +507,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Select the new Animation");
             int returnVal = fc.showOpenDialog(this);
@@ -534,7 +534,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             }
             String type = buildHandler.getBuildModelAnims().getAnimations().get(jlAnimationsList.getSelectedIndex()).getExtensionName();
 
-            fc.setFileFilter(new FileNameExtensionFilter(type.toUpperCase() + " (*." + type + ")", type));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter(type.toUpperCase() + " (*." + type + ")", type));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save the Animation");
             try {//TODO: Replace this with some index bounds cheking?
@@ -823,7 +823,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Add a new Building NSBTX");
             int returnVal = fc.showOpenDialog(this);
@@ -855,7 +855,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Replace the Building NSBTX");
             int returnVal = fc.showOpenDialog(this);
@@ -886,7 +886,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save Building's NSBTX");
             try {//TODO: Replace this with some index bounds cheking?
@@ -1023,7 +1023,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
         if (handler.getLastBuildDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("BLD (*.bld)", "bld"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("BLD (*.bld)", "bld"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Import Buildings File");
         int returnVal = fc.showOpenDialog(this);
@@ -1051,7 +1051,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastMapDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("BLD (*.bld)", "bld"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("BLD (*.bld)", "bld"));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save Building File");
             try {//TODO: Replace this with some index bounds cheking?
@@ -1231,7 +1231,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
         if (handler.getLastMapDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open Map's NSBMD");
         int returnVal = fc.showOpenDialog(this);
@@ -1410,7 +1410,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Add a new Animation");
             int returnVal = fc.showOpenDialog(this);
@@ -1436,7 +1436,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             if (handler.getLastBuildDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastBuildDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Animation Files (*.nsbca, *.nsbta, *.nsbtp, *.nsbma)", "nsbca", "nsbta", "nsbtp", "nsbma"));
             fc.setApproveButtonText("Open");
             fc.setDialogTitle("Select the new Animation");
             int returnVal = fc.showOpenDialog(this);
@@ -1464,7 +1464,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
             }
             String type = buildHandler.getMapAnimations().getAnimations().get(jlMapAnimationsList.getSelectedIndex()).getExtensionName();
 
-            fc.setFileFilter(new FileNameExtensionFilter(type.toUpperCase() + " (*." + type + ")", type));
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter(type.toUpperCase() + " (*." + type + ")", type));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save the Animation");
             try {//TODO: Replace this with some index bounds cheking?
@@ -1501,7 +1501,7 @@ public class BuildingEditorDialogHGSS extends JDialog {
         if (handler.getLastMapDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open Map's NSBMD");
         int returnVal = fc.showOpenDialog(this);

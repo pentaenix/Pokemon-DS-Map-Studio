@@ -6,32 +6,118 @@ plugins {
 
 repositories {
     mavenCentral()
-    jcenter()
+    maven {
+        url = 'https://jogamp.org/deployment/maven/'
+    }
     flatDir {
         dirs 'libs'
     }
 }
 
 dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    // Prefer *-main artifacts: they pull correct native jars per platform (do not bundle jogamp-fat / old libs).
+    implementation fileTree(project.file("libs")) {
+        include "*.jar"
+        exclude "jogamp-fat.jar"
+        exclude "jogl*.jar"
+        exclude "gluegen*.jar"
+        exclude "nativewindow*.jar"
+        exclude "newt*.jar"
+    }
+    implementation "org.jogamp.gluegen:gluegen-rt-main:2.6.0"
+    implementation "org.jogamp.jogl:jogl-all-main:2.6.0"
+
     implementation group: 'com.formdev', name: 'flatlaf', version: '0.39'
     implementation group: 'com.miglayout', name: 'miglayout-swing', version: '5.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
 
 version '2.2'
-mainClassName = "editor.MainFrame"
+
+application {
+    mainClass = 'editor.MainFrame'
+}
 
 compileJava.options.encoding = 'UTF-8'
 compileTestJava.options.encoding = 'UTF-8'
 
+// macOS Swing/AWT: same JVM props as ./pdsm run (no -XstartOnFirstThread).
+tasks.named('run', JavaExec).configure {
+    if (System.getProperty('os.name').toLowerCase().contains('mac')) {
+        jvmArgs '-Djava.awt.headless=false',
+                '-Dsun.java2d.metal=false',
+                '-Dapple.awt.UIElement=false',
+                '-Dapple.laf.useScreenMenuBar=false',
+                '-Xdock:name=Pokemon DS Map Studio',
+                '-Dapple.awt.application.name=Pokemon DS Map Studio'
+    }
+}
+
 jar {
+    archiveFileName = 'pokemon-ds-map-studio.jar'
     entryCompression = ZipEntryCompression.STORED
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     manifest {
-        attributes "Main-Class": mainClassName
+        attributes 'Main-Class': 'editor.MainFrame'
     }
 
     from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+        configurations.runtimeClasspath.files.collect { zipTree(it) }
+    }
+}
+
+// macOS: Finder double-click .app (jpackage embeds the JDK you build with)
+def macAppStagingDir = layout.buildDirectory.dir('jpackage-input')
+def macAppOutDir = layout.buildDirectory.dir('mac-dist')
+
+tasks.register('jpackageStaging', Copy) {
+    group = 'distribution'
+    description = 'Copy fat JAR into an isolated folder for jpackage --input'
+    dependsOn tasks.jar
+    from tasks.jar.archiveFile
+    into macAppStagingDir
+}
+
+tasks.register('packageMacApp') {
+    group = 'distribution'
+    description = 'Build Pokemon DS Map Studio.app under build/mac-dist/'
+    dependsOn tasks.named('jpackageStaging')
+
+    onlyIf {
+        System.getProperty('os.name', '').toLowerCase().contains('mac')
+    }
+
+    doLast {
+        def jpkg = java.nio.file.Path.of(System.getProperty('java.home'), 'bin', 'jpackage').toFile()
+        if (!jpkg.canExecute()) {
+            throw new GradleException("Missing jpackage at ${jpkg.absolutePath}. Install a full JDK 17+, not only a JRE.")
+        }
+
+        def destParent = macAppOutDir.get().asFile
+        if (destParent.exists()) {
+            delete(destParent)
+        }
+        destParent.mkdirs()
+
+        exec {
+            commandLine(
+                    jpkg.absolutePath,
+                    '--type', 'app-image',
+                    '--input', macAppStagingDir.get().asFile.absolutePath,
+                    '--dest', macAppOutDir.get().asFile.absolutePath,
+                    '--name', 'Pokemon DS Map Studio',
+                    '--main-jar', tasks.jar.archiveFileName.get(),
+                    '--app-version', project.version.toString(),
+                    '--vendor', 'Pokemon DS Map Studio',
+                    '--java-options', '-Djava.awt.headless=false',
+                    '--java-options', '-Dsun.java2d.metal=false',
+                    '--java-options', '-Dapple.awt.UIElement=false',
+                    '--java-options', '-Dapple.laf.useScreenMenuBar=false',
+                    '--java-options', '-Xdock:name=Pokemon DS Map Studio',
+                    '--java-options', '-Dapple.awt.application.name=Pokemon DS Map Studio',
+                    '--mac-package-identifier', 'org.pokemon.dsmapstudio.mapstudio'
+            )
+        }
     }
 }

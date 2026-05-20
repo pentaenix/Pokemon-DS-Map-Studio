@@ -11,7 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import javax.swing.*;
 import javax.swing.GroupLayout;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 
 /**
  * @author Trifindo, JackHack96
@@ -50,7 +50,7 @@ public class BorderMapsDisplay extends JPanel {
                 if (handler.getLastTilesetDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
                 }
-                fc.setFileFilter(new FileNameExtensionFilter("OBJ (*.obj)", "obj"));
+                fc.setFileFilter(new DirectoryFriendlyExtensionFilter("OBJ (*.obj)", "obj"));
                 fc.setApproveButtonText("Open");
                 fc.setDialogTitle("Open");
                 int returnVal = fc.showOpenDialog(handler.getMainFrame());

@@ -40,6 +40,7 @@ import java.awt.image.BufferedImage;
 
 import tileset.Tile;
 import tileset.Tileset;
+import utils.StartupTrace;
 import utils.Utils;
 
 /**
@@ -66,7 +67,9 @@ public class TilesetRenderer {
     }
 
     public void init() {
+        StartupTrace.log("TilesetRenderer.init: enter");
         GLProfile glp = GLProfile.getGL2ES1();//.getDefault();
+        StartupTrace.detail("TilesetRenderer.init: after GLProfile.getGL2ES1");
         try {
             GLCapabilities caps = new GLCapabilities(glp);
             caps.setHardwareAccelerated(true);
@@ -79,59 +82,94 @@ public class TilesetRenderer {
             caps.setPBuffer(false);
             //caps.setTransparentAlphaValue(0);//NEW CODE
 
+            StartupTrace.detail("TilesetRenderer.init: before GLDrawableFactory.getFactory");
             GLDrawableFactory factory = GLDrawableFactory.getFactory(glp);
 
+            StartupTrace.detail("TilesetRenderer.init: before createOffscreenAutoDrawable");
             drawable = factory.createOffscreenAutoDrawable(factory.getDefaultDevice(), caps,
                     new DefaultGLCapabilitiesChooser(), Tile.maxTileSize * tileSize, Tile.maxTileSize * tileSize);
+            StartupTrace.detail("TilesetRenderer.init: after createOffscreenAutoDrawable");
 
+            StartupTrace.detail("TilesetRenderer.init: before drawable.display()");
             drawable.display();
+            StartupTrace.detail("TilesetRenderer.init: after drawable.display()");
+
+            StartupTrace.detail("TilesetRenderer.init: before makeCurrent");
             drawable.getContext().makeCurrent();
+            StartupTrace.detail("TilesetRenderer.init: after makeCurrent");
 
             gl = drawable.getGL().getGL2();
 
             //gl.glClearColor(0.0f, 0.5f, 0.5f, 0.0f); //Use this for transparent background
             gl.glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
 
+            StartupTrace.detail("TilesetRenderer.init: before tileset.loadTexturesGL()");
             tileset.loadTexturesGL();
+            StartupTrace.detail("TilesetRenderer.init: after tileset.loadTexturesGL()");
         } catch (GLException ex) {
             ex.printStackTrace();
         }
+        StartupTrace.log("TilesetRenderer.init: exit");
     }
 
     public void setTileset(Tileset tileset) {
         this.tileset = tileset;
     }
 
+    public boolean isInitialized() {
+        return gl != null && drawable != null;
+    }
+
     public void renderTiles() {
+        StartupTrace.log("TilesetRenderer.renderTiles: enter size=" + tileset.size());
         //GL4 gl = (GL4) GLContext.getCurrentGL();
         for (int i = 0; i < tileset.size(); i++) {
             renderTileThumbnail(i);
         }
         gl.getContext().release();
+        StartupTrace.log("TilesetRenderer.renderTiles: exit");
     }
 
     public void renderTileThumbnail(int tileIndex) {
+        BufferedImage img = renderTileImage(tileIndex, false);
+        if (img == null) {
+            return;
+        }
+        Tile tile = tileset.get(tileIndex);
+        tile.setThumbnail(img);
+        tile.setSmallThumbnail(Utils.resize(
+                img, smallTileSize * tile.getWidth(), smallTileSize * tile.getHeight()));
+    }
+
+    /**
+     * Renders a tile to an image using the same orthographic 3D preview as the editor.
+     * {@code transparentBackground} uses alpha for empty pixels (useful for PNG export).
+     */
+    public BufferedImage renderTileImage(int tileIndex, boolean transparentBackground) {
+        if (!isInitialized()) {
+            return null;
+        }
         Tile tile = tileset.get(tileIndex);
         try {
+            if (transparentBackground) {
+                gl.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            } else {
+                gl.glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
+            }
 
             gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             setupVAOsVBOs(tile);
 
-            drawOpaqueTile(tile); //NEW CODE REMOVED Remove this for transparent background
+            drawOpaqueTile(tile);
             drawTransparentTile(tile);
 
-            //BufferedImage img = new AWTGLReadBufferUtil(drawable.getGLProfile(), false).readPixelsToBufferedImage(drawable.getGL(), 0, 0, tile.getWidth() * tileSize, tile.getHeight() * tileSize, true /* awtOrientation */);
-            //BufferedImage img = new AWTGLReadBufferUtil(drawable.getGLProfile(), true).readPixelsToBufferedImage(drawable.getGL(), true /* awtOrientation */); //Use this for transparent background
-            BufferedImage img = new AWTGLReadBufferUtil(drawable.getGLProfile(), false).readPixelsToBufferedImage(drawable.getGL(), true /* awtOrientation */);
-            img = img.getSubimage(0, 0, tile.getWidth() * tileSize, tile.getHeight() * tileSize);
-
-            //tile.setThumbnail(Utils.addBackgroundColor(new Color(0.0f, 0.5f, 0.5f, 1.0f), img));//Use this for transparent background
-            tile.setThumbnail(img);
-            tile.setSmallThumbnail(Utils.resize(
-                    img, smallTileSize * tile.getWidth(), smallTileSize * tile.getHeight()));
+            BufferedImage img = new AWTGLReadBufferUtil(drawable.getGLProfile(), transparentBackground)
+                    .readPixelsToBufferedImage(drawable.getGL(), true /* awtOrientation */);
+            return img.getSubimage(0, 0, tile.getWidth() * tileSize, tile.getHeight() * tileSize);
         } catch (GLException ex) {
             ex.printStackTrace();
+            return null;
         }
     }
 
@@ -280,7 +318,9 @@ public class TilesetRenderer {
     }
 
     public void destroy() {
-        drawable.getContext().destroy();
+        if (drawable != null && drawable.getContext() != null) {
+            drawable.getContext().destroy();
+        }
         /*try {
             drawable.destroy();
         } catch (GLException ex) {

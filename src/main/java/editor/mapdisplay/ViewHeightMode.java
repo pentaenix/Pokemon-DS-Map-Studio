@@ -22,7 +22,7 @@ import javax.swing.SwingUtilities;
 public class ViewHeightMode extends ViewMode {
 
     @Override
-    public void mousePressed(MapDisplay d, MouseEvent e) {
+    public void mousePressed(MapDisplayGL d, MouseEvent e) {
         if (d.SHIFT_PRESSED) {
             if (SwingUtilities.isLeftMouseButton(e) || SwingUtilities.isMiddleMouseButton(e)) {
                 d.lastMouseX = e.getX();
@@ -68,7 +68,7 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void mouseReleased(MapDisplay d, MouseEvent e) {
+    public void mouseReleased(MapDisplayGL d, MouseEvent e) {
         switch (d.editMode) {
             case MODE_CLEAR:
                 d.handler.getMapMatrix().removeUnusedMaps();
@@ -85,7 +85,7 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void mouseDragged(MapDisplay d, MouseEvent e) {
+    public void mouseDragged(MapDisplayGL d, MouseEvent e) {
         d.updateMousePostion(e);
         if (d.SHIFT_PRESSED) {
             if (SwingUtilities.isLeftMouseButton(e) || SwingUtilities.isMiddleMouseButton(e)) {
@@ -105,8 +105,10 @@ public class ViewHeightMode extends ViewMode {
                     break;
                 case MODE_MOVE:
                     if (SwingUtilities.isLeftMouseButton(e) || SwingUtilities.isMiddleMouseButton(e)) {
-                        d.cameraX -= (((float) ((e.getX() - d.lastMouseX))) / d.getWidth()) / (d.orthoScale / (d.cols + 2 * d.borderSize));
-                        d.cameraY += (((float) ((e.getY() - d.lastMouseY))) / d.getHeight()) / (d.orthoScale / (d.rows + 2 * d.borderSize));
+                        d.cameraX -= (d.normalizedMouseXInViewport(e.getX()) - d.normalizedMouseXInViewport(d.lastMouseX))
+                                / (d.orthoScale / (d.cols + 2 * d.borderSize));
+                        d.cameraY += (d.normalizedMouseYInViewport(e.getY()) - d.normalizedMouseYInViewport(d.lastMouseY))
+                                / (d.orthoScale / (d.rows + 2 * d.borderSize));
                         d.targetX = d.cameraX;
                         d.targetY = d.cameraY;
                         d.lastMouseX = e.getX();
@@ -119,13 +121,13 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void mouseMoved(MapDisplay d, MouseEvent e) {
+    public void mouseMoved(MapDisplayGL d, MouseEvent e) {
         d.updateMousePostion(e);
         d.repaint();
     }
 
     @Override
-    public void keyPressed(MapDisplay d, KeyEvent e) {
+    public void keyPressed(MapDisplayGL d, KeyEvent e) {
         switch (e.getKeyCode()) {
             case KeyEvent.VK_SPACE:
                 d.set3DView();
@@ -155,19 +157,23 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void keyReleased(MapDisplay d, KeyEvent e) {
+    public void keyReleased(MapDisplayGL d, KeyEvent e) {
 
     }
 
     @Override
-    public void mouseWheelMoved(MapDisplay d, MouseWheelEvent e) {
+    public void mouseWheelMoved(MapDisplayGL d, MouseWheelEvent e) {
         if (d.SHIFT_PRESSED) {
             d.zoomCameraOrtho(e);
             d.repaint();
         } else {
             switch (d.editMode) {
                 case MODE_EDIT:
-                    int delta = e.getWheelRotation() < 0 ? 1 : -1;
+                    double rot = MapDisplayGL.wheelEffectiveRotation(e);
+                    if (rot == 0.0) {
+                        break;
+                    }
+                    int delta = rot < 0 ? 1 : -1;
                     d.handler.incrementHeightSelected(delta);
                     d.handler.getMainFrame().repaintHeightSelector();
                     d.repaint();
@@ -185,7 +191,7 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void paintComponent(MapDisplay d, Graphics g) {
+    public void paintComponent(MapDisplayGL d, Graphics g) {
         if (d.handler != null) {
             Graphics2D g2d = (Graphics2D) g;
 
@@ -215,7 +221,7 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void applyCameraTransform(MapDisplay d, GL2 gl) {
+    public void applyCameraTransform(MapDisplayGL d, GL2 gl) {
         float v = (16.0f + d.borderSize) / d.orthoScale;
         gl.glOrtho(-v, v, -v, v, getZNear(d), getZFar(d));
         //TODO: Use this code for keeping the aspect ratio
@@ -224,7 +230,7 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public void setCameraAtMap(MapDisplay d) {
+    public void setCameraAtMap(MapDisplayGL d) {
         d.orthoScale = 1.0f;
     }
 
@@ -234,17 +240,17 @@ public class ViewHeightMode extends ViewMode {
     }
 
     @Override
-    public float getZNear(MapDisplay d) {
+    public float getZNear(MapDisplayGL d) {
         return -100.0f;
     }
 
     @Override
-    public float getZFar(MapDisplay d) {
+    public float getZFar(MapDisplayGL d) {
         return 100.0f;
     }
 
     @Override
-    public Vec3f[][] getFrustumPlanes(MapDisplay d) {
+    public Vec3f[][] getFrustumPlanes(MapDisplayGL d) {
         Vec3f camAngles = new Vec3f(d.cameraRotX, d.cameraRotY, d.cameraRotZ);
         Vec3f tarPos = new Vec3f(d.cameraX, d.cameraY, 0.0f);
         Vec3f camDir = d.rotToDir_(camAngles);

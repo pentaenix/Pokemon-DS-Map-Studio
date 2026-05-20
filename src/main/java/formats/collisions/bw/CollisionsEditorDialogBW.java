@@ -11,7 +11,7 @@ import java.text.DecimalFormat;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 
 import editor.handler.MapEditorHandler;
 import net.miginfocom.swing.*;
@@ -177,7 +177,7 @@ public class CollisionsEditorDialogBW extends JDialog {
         if (handler.getLastCollisionsDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastCollisionsDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Terrain File (*.per)", CollisionsBW3D.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Terrain File (*.per)", CollisionsBW3D.fileExtension));
         fc.setApproveButtonText("Save");
         fc.setDialogTitle("Save Permissions File");
         int returnVal = fc.showOpenDialog(this);
@@ -200,7 +200,7 @@ public class CollisionsEditorDialogBW extends JDialog {
         if (handler.getLastCollisionsDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastCollisionsDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Terrain File (*.per)", CollisionsBW3D.fileExtension));
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("Terrain File (*.per)", CollisionsBW3D.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open Permissions File");
         int returnVal = fc.showOpenDialog(this);

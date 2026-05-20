@@ -8,16 +8,18 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.prefs.Preferences;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.GroupLayout;
 import javax.swing.border.*;
 import javax.swing.event.*;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import utils.DirectoryFriendlyExtensionFilter;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 
@@ -65,6 +67,8 @@ import editor.tileseteditor.*;
 import net.miginfocom.swing.MigLayout;
 import org.xml.sax.SAXException;
 import tileset.*;
+import utils.StartupTrace;
+import utils.TilesetRendererPolicy;
 import utils.Utils;
 
 /**
@@ -77,8 +81,37 @@ public class MainFrame extends JFrame {
     private boolean opened_map = false;
 
     public static void main(String[] args) {
+        StartupTrace.log("main: enter");
+        System.out.println("[PDSM] java.version=" + System.getProperty("java.version"));
+        System.out.println("[PDSM] os.name=" + System.getProperty("os.name"));
+        System.out.println("[PDSM] pdsm.enableJoglMap=" + System.getProperty("pdsm.enableJoglMap"));
+        System.out.println("[PDSM] pdsm.enableJogl=" + System.getProperty("pdsm.enableJogl"));
+        System.out.println("[PDSM] pdsm.enableJoglTilesetRenderer=" + System.getProperty("pdsm.enableJoglTilesetRenderer"));
+        System.out.println("[PDSM] pdsm.enableJoglTilesetRendererStartup=" + System.getProperty("pdsm.enableJoglTilesetRendererStartup"));
+        System.out.println("[PDSM] pdsm.enableJoglTilesetRendererRuntime=" + System.getProperty("pdsm.enableJoglTilesetRendererRuntime"));
+        System.out.println("[PDSM] pdsm.enableJoglTile=" + System.getProperty("pdsm.enableJoglTile"));
+        System.out.println("[PDSM] pdsm.useNativeFileDialog=" + System.getProperty("pdsm.useNativeFileDialog"));
+        System.out.println("[PDSM] main thread=" + Thread.currentThread().getName());
+        String os = System.getProperty("os.name", "");
+        boolean macosx = os.startsWith("Mac") || os.contains("Darwin");
+        StartupTrace.log("main: os=" + os + " macosx=" + macosx);
+        if (GraphicsEnvironment.isHeadless()) {
+            System.err.println("Pokemon DS Map Studio needs a graphical desktop (java.awt.headless=true). "
+                    + "Run from Terminal.app on the Mac desktop, not over SSH without a display.");
+            System.exit(2);
+        }
+        if (macosx) {
+            // Java2D Metal + JOGL NSOpenGL overlap can crash on macOS 14+; keep Java2D off Metal.
+            System.setProperty("sun.java2d.metal", "false");
+            System.setProperty("apple.awt.UIElement", "false");
+            System.setProperty("apple.laf.useScreenMenuBar", "false");
+            System.setProperty("apple.awt.application.name", "Pokemon DS Map Studio");
+        }
+
+        StartupTrace.log("main: before LaF / prefs");
         try {
             String theme = prefs.get("Theme", "Native");
+            StartupTrace.log("main: theme=" + theme);
             switch (theme) {
                 case "Native":
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -91,31 +124,66 @@ public class MainFrame extends JFrame {
                     break;
             }
             loadRecentMaps();
+            StartupTrace.log("main: LaF + loadRecentMaps done");
         } catch (Exception ex) {
             System.err.println("Failed to initialize LaF");
         }
 
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(() -> {
-            MainFrame mainFrame = new MainFrame();
-            mainFrame.setVisible(true);
-
-            if (args.length > 0) {
+        Runnable startUi = () -> {
+            try {
+                MainFrame mainFrame = new MainFrame();
+                mainFrame.setVisible(true);
+                StartupTrace.log("UI: setVisible(true) bounds=" + mainFrame.getBounds());
                 try {
-                    if (args[0].endsWith(MapMatrix.fileExtension)) {
-                        mainFrame.openMap(args[0]);
-                    } else if (args[0].endsWith(Tileset.fileExtension)) {
-                        mainFrame.openTileset(args[0]);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+                    mainFrame.toFront();
+                    mainFrame.setAlwaysOnTop(true);
+                    mainFrame.setAlwaysOnTop(false);
+                } catch (Throwable ignored) {
                 }
+                openStartupFiles(mainFrame, args);
+                StartupTrace.log("UI: startup complete");
+                mainFrame.traceMapLayout("after startup");
+            } catch (Throwable t) {
+                t.printStackTrace();
+                System.exit(1);
             }
-        });
+        };
+
+        // Normal Swing/AWT: build and show the frame on the EDT (including JOGL inside Swing).
+        StartupTrace.log("main: EventQueue.invokeLater(startUi)");
+        java.awt.EventQueue.invokeLater(startUi);
+        StartupTrace.log("main: invokeLater queued; main thread continuing");
+    }
+
+    private static void openStartupFiles(MainFrame mainFrame, String[] args) {
+        if (args.length <= 0) {
+            return;
+        }
+        try {
+            if (args[0].endsWith(MapMatrix.fileExtension)) {
+                mainFrame.openMap(args[0]);
+            } else if (args[0].endsWith(Tileset.fileExtension)) {
+                mainFrame.openTileset(args[0]);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void traceInit(String message) {
+        System.out.println("[PDSM] " + System.currentTimeMillis()
+                + " tid=" + Thread.currentThread().getId()
+                + " " + Thread.currentThread().getName()
+                + " | initComponents: " + message);
+        System.out.flush();
+        System.err.flush();
     }
 
     public MainFrame() {
+        StartupTrace.log("MainFrame.<init>: enter");
+        System.out.println("[PDSM] MainFrame.<init> before initComponents thread=" + Thread.currentThread().getName());
         initComponents();
+        System.out.println("[PDSM] MainFrame.<init> after initComponents thread=" + Thread.currentThread().getName());
 
         updateRecentMapsMenu();
 
@@ -131,11 +199,16 @@ public class MainFrame extends JFrame {
         Tileset tileset = new Tileset();
         tileset.getSmartGridArray().add(new SmartGrid());
 
-        TilesetRenderer tr = new TilesetRenderer(tileset);
-        try {
-            tr.renderTiles();
-        } catch (NullPointerException e) {
-            e.printStackTrace();
+        if (TilesetRendererPolicy.isStartupEnabled()) {
+            StartupTrace.log("MainFrame: TilesetRenderer startup enabled");
+            TilesetRenderer tr = new TilesetRenderer(tileset);
+            try {
+                tr.renderTiles();
+            } catch (Throwable e) {
+                e.printStackTrace();
+            }
+        } else {
+            StartupTrace.log("MainFrame: skipping TilesetRenderer startup");
         }
 
         //Border maps tileset
@@ -161,7 +234,18 @@ public class MainFrame extends JFrame {
         handler.updateAllMapThumbnails();
         mapMatrixDisplay.updateMapsImage();
 
+        applyInitialSplitAndMinSize();
 
+        StartupTrace.log("MainFrame.<init>: exit");
+    }
+
+    private void applyInitialSplitAndMinSize() {
+        try {
+            setMinimumSize(new Dimension(640, 480));
+            jspMainWindow.setDividerLocation(0.72);
+        } catch (Throwable t) {
+            StartupTrace.detail("applyInitialSplitAndMinSize: " + t);
+        }
     }
 
     private void formWindowClosing(WindowEvent e) {
@@ -223,6 +307,10 @@ public class MainFrame extends JFrame {
 
     private void jmiExportAllTilesActionPerformed(ActionEvent e) {
         saveAllTilesAsObjWithDialog();
+    }
+
+    private void jmiDumpTilesetAsPngsActionPerformed(ActionEvent e) {
+        dumpTilesetAsPngsWithDialog();
     }
 
     private void jmiUndoActionPerformed(ActionEvent e) {
@@ -425,7 +513,24 @@ public class MainFrame extends JFrame {
 
 
     private void mapDisplayContainerComponentResized(ComponentEvent e) {
+        traceMapLayout("before updateMapDisplaySize");
         updateMapDisplaySize();
+        traceMapLayout("after updateMapDisplaySize");
+    }
+
+    private void traceMapLayout(String where) {
+        if (!Boolean.getBoolean("pdsm.traceLayout")) {
+            return;
+        }
+        if (mapDisplayContainer == null || mapDisplay == null || jspMainWindow == null) {
+            return;
+        }
+        System.out.println("[PDSM] layout " + where
+                + " container.size=" + mapDisplayContainer.getSize()
+                + " container.pref=" + mapDisplayContainer.getPreferredSize()
+                + " map.size=" + mapDisplay.getSize()
+                + " map.pref=" + mapDisplay.getPreferredSize()
+                + " split.divider=" + jspMainWindow.getDividerLocation());
     }
 
     private void jtbView3DActionPerformed(ActionEvent e) {
@@ -647,42 +752,152 @@ public class MainFrame extends JFrame {
         }
     }
 
+    private JFileChooser createProjectFileChooser(String purpose) {
+        JFileChooser fc = new JFileChooser();
+
+        fc.setFileHidingEnabled(false);
+        fc.setAcceptAllFileFilterUsed(true);
+
+        System.out.println("[PDSM] JFileChooser " + purpose
+                + " cwd=" + fc.getCurrentDirectory()
+                + " fileSelectionMode=" + fc.getFileSelectionMode()
+                + " acceptAll=" + fc.isAcceptAllFileFilterUsed()
+                + " hiding=" + fc.isFileHidingEnabled());
+
+        return fc;
+    }
+
     public void openMapWithDialog() {
-        final JFileChooser fc = new JFileChooser();
-        if (handler.getLastMapDirectoryUsed() != null) {
-            fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
+        System.setProperty("apple.awt.fileDialogForDirectories", "false");
+
+        String osName = System.getProperty("os.name", "");
+        boolean mac = osName.contains("Mac") || osName.contains("Darwin");
+        if (mac && Boolean.getBoolean("pdsm.useNativeFileDialog")) {
+            String path = openMapWithNativeFileDialog();
+            if (path != null) {
+                path = Utils.addExtensionToPath(path, MapMatrix.fileExtension);
+                addRecentMap(path);
+                updateRecentMaps();
+                updateRecentMapsMenu();
+                openMap(path);
+            }
+            return;
         }
 
-        fc.setFileFilter(new FileNameExtensionFilter("Pokemon DS map (*.pdsmap)", MapMatrix.fileExtension));
+        final JFileChooser fc = new JFileChooser();
+
+        if (handler.getLastMapDirectoryUsed() != null) {
+            fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
+        } else {
+            fc.setCurrentDirectory(new File(System.getProperty("user.home"), "Downloads"));
+        }
+
+        fc.setFileHidingEnabled(false);
+        fc.setAcceptAllFileFilterUsed(true);
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter(
+                "Pokemon DS map (*.pdsmap)",
+                MapMatrix.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open Map");
+
+        File cwd = fc.getCurrentDirectory();
+        StartupTrace.log("openMapWithDialog: cwd=" + cwd
+                + " exists=" + cwd.exists()
+                + " readable=" + cwd.canRead()
+                + " selectionMode=" + fc.getFileSelectionMode()
+                + " hiding=" + fc.isFileHidingEnabled()
+                + " acceptAll=" + fc.isAcceptAllFileFilterUsed()
+                + " filter=" + fc.getFileFilter());
+
+        File[] cwdItems = cwd.listFiles();
+        StartupTrace.log("openMapWithDialog: cwd item count="
+                + (cwdItems == null ? "null" : cwdItems.length));
+        if (cwdItems != null) {
+            Arrays.sort(cwdItems, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+            for (int i = 0; i < Math.min(cwdItems.length, 50); i++) {
+                File f = cwdItems[i];
+                StartupTrace.log("openMapWithDialog: cwd item "
+                        + (f.isDirectory() ? "[dir] " : "[file] ")
+                        + f.getName());
+            }
+        }
+
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            addRecentMap(Utils.addExtensionToPath(fc.getSelectedFile().getPath(), MapMatrix.fileExtension));
+            StartupTrace.log("openMapWithDialog: selected=" + fc.getSelectedFile());
+            File selected = fc.getSelectedFile();
+            if (selected == null) {
+                return;
+            }
+
+            if (selected.isDirectory()) {
+                fc.setCurrentDirectory(selected);
+                return;
+            }
+
+            String path = Utils.addExtensionToPath(selected.getPath(), MapMatrix.fileExtension);
+            addRecentMap(path);
             updateRecentMaps();
             updateRecentMapsMenu();
-            openMap(fc.getSelectedFile().getPath());
+            openMap(path);
         }
     }
 
+    private String openMapWithNativeFileDialog() {
+        FileDialog dialog = new FileDialog(this, "Open Map", FileDialog.LOAD);
+        dialog.setFilenameFilter((dir, name) ->
+                name != null && name.toLowerCase(Locale.ROOT).endsWith("." + MapMatrix.fileExtension));
+
+        if (handler.getLastMapDirectoryUsed() != null) {
+            dialog.setDirectory(handler.getLastMapDirectoryUsed());
+        } else {
+            dialog.setDirectory(new File(System.getProperty("user.home"), "Downloads").getAbsolutePath());
+        }
+
+        dialog.setVisible(true);
+
+        String file = dialog.getFile();
+        String dir = dialog.getDirectory();
+
+        StartupTrace.log("openMapWithNativeFileDialog: dir=" + dir + " file=" + file);
+
+        if (file == null || dir == null) {
+            return null;
+        }
+
+        return new File(dir, file).getAbsolutePath();
+    }
+
     public void addMapWithDialog() {
-        final JFileChooser fc = new JFileChooser();
+        final JFileChooser fc = createProjectFileChooser("Add Maps from PDSMAP file");
         if (handler.getLastMapDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
 
-        fc.setFileFilter(new FileNameExtensionFilter("Pokemon DS map (*.pdsmap)", MapMatrix.fileExtension));
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter(
+                "Pokemon DS map (*.pdsmap)",
+                MapMatrix.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Add Maps from PDSMAP file");
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            if (fc.getSelectedFile().exists()) {
-                handler.setLastMapDirectoryUsed(fc.getSelectedFile().getParent());
+            File selected = fc.getSelectedFile();
+            if (selected == null) {
+                return;
+            }
+            if (selected.isDirectory()) {
+                fc.setCurrentDirectory(selected);
+                return;
+            }
+            if (selected.exists()) {
+                handler.setLastMapDirectoryUsed(selected.getParent());
                 try {
-                    HashMap<Point, MapData> maps = MapMatrix.getGridsFromFile(fc.getSelectedFile().getPath(), handler);
+                    HashMap<Point, MapData> maps = MapMatrix.getGridsFromFile(selected.getPath(), handler);
 
                     final MapMatrixImportDialog dialog = new MapMatrixImportDialog(this);
-                    dialog.init(handler, fc.getSelectedFile().getPath(), maps);
+                    dialog.init(handler, selected.getPath(), maps);
                     dialog.setLocationRelativeTo(this);
                     dialog.setVisible(true);
 
@@ -872,32 +1087,50 @@ public class MainFrame extends JFrame {
     }
 
     public void openTilesetWithDialog() {
-        final JFileChooser fc = new JFileChooser();
+        final JFileChooser fc = createProjectFileChooser("Open Tileset");
         if (handler.getLastTilesetDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Pokemon DS Tileset (*.pdsts)", Tileset.fileExtension));
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter(
+                "Pokemon DS Tileset (*.pdsts)",
+                Tileset.fileExtension));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open");
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            String path = fc.getSelectedFile().getPath();
+            File selected = fc.getSelectedFile();
+            if (selected == null || selected.isDirectory()) {
+                if (selected != null) {
+                    fc.setCurrentDirectory(selected);
+                }
+                return;
+            }
+            String path = selected.getPath();
             openTileset(path);
         }
     }
 
     private void openBackImgWithDialog() {
-        final JFileChooser fc = new JFileChooser();
+        final JFileChooser fc = createProjectFileChooser("Open Background Image");
         if (handler.getLastMapDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("PNG (*.png)", "png"));
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter("PNG (*.png)", "png"));
         fc.setApproveButtonText("Open");
         fc.setDialogTitle("Open Background Image");
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
+            File selected = fc.getSelectedFile();
+            if (selected == null || selected.isDirectory()) {
+                if (selected != null) {
+                    fc.setCurrentDirectory(selected);
+                }
+                return;
+            }
             try {
-                BufferedImage img = ImageIO.read(fc.getSelectedFile());
+                BufferedImage img = ImageIO.read(selected);
 
                 mapDisplay.setBackImage(img);
                 mapDisplay.setBackImageEnabled(true);
@@ -989,18 +1222,28 @@ public class MainFrame extends JFrame {
     }
 
     private void saveMapWithDialog() {
-        final JFileChooser fc = new JFileChooser();
+        final JFileChooser fc = createProjectFileChooser("Save Map");
         if (handler.getLastMapDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
-        fc.setFileFilter(new FileNameExtensionFilter("Pokemon DS map (*.pdsmap)", MapMatrix.fileExtension));
+        fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fc.setFileFilter(new DirectoryFriendlyExtensionFilter(
+                "Pokemon DS map (*.pdsmap)",
+                MapMatrix.fileExtension));
         fc.setApproveButtonText("Save");
         fc.setDialogTitle("Save");
         int returnVal = fc.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            handler.setLastMapDirectoryUsed(fc.getSelectedFile().getParent());
+            File selected = fc.getSelectedFile();
+            if (selected == null || selected.isDirectory()) {
+                if (selected != null) {
+                    fc.setCurrentDirectory(selected);
+                }
+                return;
+            }
+            handler.setLastMapDirectoryUsed(selected.getParent());
             try {
-                String path = fc.getSelectedFile().getPath();
+                String path = selected.getPath();
                 handler.getMapMatrix().saveGridsToFile(path);
                 handler.getMapMatrix().filePath = path;
                 setTitle(handler.getMapName() + " - " + handler.getVersionName());
@@ -1033,18 +1276,27 @@ public class MainFrame extends JFrame {
 
     private void saveTilesetWithDialog() {
         if (handler.getTileset().size() > 0) {
-            final JFileChooser fc = new JFileChooser();
+            final JFileChooser fc = createProjectFileChooser("Save Tileset");
             if (handler.getLastTilesetDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("Pokemon DS tileset (*.pdsts)", Tileset.fileExtension));
+            fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter(
+                    "Pokemon DS tileset (*.pdsts)",
+                    Tileset.fileExtension));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save Tileset");
             int returnVal = fc.showOpenDialog(this);
             if (returnVal == JFileChooser.APPROVE_OPTION) {
-                handler.setLastMapDirectoryUsed(fc.getSelectedFile().getParent());
+                File file = fc.getSelectedFile();
+                if (file == null || file.isDirectory()) {
+                    if (file != null) {
+                        fc.setCurrentDirectory(file);
+                    }
+                    return;
+                }
+                handler.setLastMapDirectoryUsed(file.getParent());
                 try {
-                    File file = fc.getSelectedFile();
                     String path = file.getParent();
                     String filename = Utils.removeExtensionFromPath(file.getName()) + "." + Tileset.fileExtension;
                     TilesetIO.saveTilesetToFile(path + File.separator + filename, handler.getTileset());
@@ -1062,6 +1314,91 @@ public class MainFrame extends JFrame {
         }
     }
 
+    public void dumpTilesetAsPngsWithDialog() {
+        Tileset tileset = handler.getTileset();
+        if (tileset.size() == 0) {
+            JOptionPane.showMessageDialog(this, "The tileset is empty", "Error exporting tiles", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        final JFileChooser fc = new JFileChooser();
+        fc.setFileHidingEnabled(false);
+        fc.setAcceptAllFileFilterUsed(true);
+        if (handler.getLastTileObjDirectoryUsed() != null) {
+            fc.setCurrentDirectory(new File(handler.getLastTileObjDirectoryUsed()));
+        }
+        fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        fc.setApproveButtonText("Select");
+        fc.setDialogTitle("Select folder for tile PNG export");
+        int returnVal = fc.showOpenDialog(this);
+        if (returnVal != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File folder = fc.getSelectedFile();
+        handler.setLastTileObjDirectoryUsed(folder.getPath());
+
+        try {
+            exportTilesetAsPngs(tileset, folder);
+            JOptionPane.showMessageDialog(this,
+                    "Exported " + tileset.size() + " tile images to:\n" + folder.getPath(),
+                    "Tiles exported", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Can't save tile images", "Error exporting tiles", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportTilesetAsPngs(Tileset tileset, File folder) throws IOException {
+        ArrayList<String> usedNames = new ArrayList<>();
+        TilesetRenderer renderer = null;
+        GLContext previousContext = mapDisplay.getContext();
+
+        try {
+            renderer = new TilesetRenderer(tileset);
+            if (!renderer.isInitialized()) {
+                renderer.destroy();
+                renderer = null;
+            }
+            for (int i = 0; i < tileset.size(); i++) {
+                Tile tile = tileset.get(i);
+                BufferedImage img = null;
+                if (renderer != null) {
+                    img = renderer.renderTileImage(i, true);
+                }
+                if (img == null) {
+                    img = tile.getThumbnail();
+                }
+                if (img == null) {
+                    throw new IOException("Could not render tile " + i + " (OpenGL unavailable and no thumbnail cached)");
+                }
+                ImageIO.write(img, "png", new File(folder, uniqueTilePngFilename(i, tile, usedNames)));
+            }
+        } finally {
+            if (renderer != null) {
+                renderer.destroy();
+                mapDisplay.setContext(previousContext, false);
+            }
+        }
+    }
+
+    private static String uniqueTilePngFilename(int index, Tile tile, ArrayList<String> usedNames) {
+        String baseName = tile.getObjFilename();
+        if (baseName == null || baseName.isEmpty()) {
+            baseName = "tile";
+        } else {
+            baseName = Utils.removeExtensionFromPath(new File(baseName).getName());
+        }
+        String filename = String.format(Locale.ROOT, "%03d_%s.png", index, baseName);
+        int counter = 1;
+        String nameNoExtension = Utils.removeExtensionFromPath(filename);
+        while (usedNames.contains(filename)) {
+            filename = nameNoExtension + "_" + counter + ".png";
+            counter++;
+        }
+        usedNames.add(filename);
+        return filename;
+    }
+
     public void saveAllTilesAsObjWithDialog() {
         if (handler.getTileset().size() > 0) {
             final ExportTileDialog exportTileDialog = new ExportTileDialog(handler.getMainFrame(), "Export Tile Settings");
@@ -1073,6 +1410,8 @@ public class MainFrame extends JFrame {
                 boolean includeVertexColors = exportTileDialog.includeVertexColors();
 
                 final JFileChooser fc = new JFileChooser();
+                fc.setFileHidingEnabled(false);
+                fc.setAcceptAllFileFilterUsed(true);
                 if (handler.getLastTileObjDirectoryUsed() != null) {
                     fc.setCurrentDirectory(new File(handler.getLastTileObjDirectoryUsed()));
                 }
@@ -1109,19 +1448,27 @@ public class MainFrame extends JFrame {
             boolean exportAllMapsJoined = exportMapDialog.exportAllMapsJoined();
             float tileUpscale = exportMapDialog.getTileUpscaling();
 
-            final JFileChooser fc = new JFileChooser();
+            final JFileChooser fc = createProjectFileChooser("Save map as OBJ");
             fc.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath)));
             if (handler.getLastMapDirectoryUsed() != null) {
                 fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
             }
-            fc.setFileFilter(new FileNameExtensionFilter("OBJ (*.obj)", "obj"));
+            fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            fc.setFileFilter(new DirectoryFriendlyExtensionFilter("OBJ (*.obj)", "obj"));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Select a name for saving the maps as OBJ");
             int returnVal = fc.showOpenDialog(this);
             if (returnVal == JFileChooser.APPROVE_OPTION) {
-                handler.setLastMapDirectoryUsed(fc.getSelectedFile().getParent());
+                File selected = fc.getSelectedFile();
+                if (selected == null || selected.isDirectory()) {
+                    if (selected != null) {
+                        fc.setCurrentDirectory(selected);
+                    }
+                    return;
+                }
+                handler.setLastMapDirectoryUsed(selected.getParent());
                 try {
-                    String path = fc.getSelectedFile().getPath();
+                    String path = selected.getPath();
                     if (exportAllMapsSeparately) {
                         path = Utils.removeMapCoordsFromName(path);
                         handler.getMapMatrix().saveMapsAsObj(path, saveTextures, includeVertexColors, tileUpscale);
@@ -1272,28 +1619,41 @@ public class MainFrame extends JFrame {
                     JOptionPane.WARNING_MESSAGE);
         }
 
-        final JFileChooser fcOpen = new JFileChooser();
+        final JFileChooser fcOpen = createProjectFileChooser("Open OBJ for IMD export");
         fcOpen.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath) + ".obj"));
         if (handler.getLastMapDirectoryUsed() != null) {
             fcOpen.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
-        fcOpen.setFileFilter(new FileNameExtensionFilter("OBJ (*.obj)", "obj"));
+        fcOpen.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fcOpen.setFileFilter(new DirectoryFriendlyExtensionFilter("OBJ (*.obj)", "obj"));
         fcOpen.setApproveButtonText("Open");
         fcOpen.setDialogTitle("Open OBJ Map for converting into IMD");
         int returnValOpen = fcOpen.showOpenDialog(this);
         if (returnValOpen == JFileChooser.APPROVE_OPTION) {
-            if (fcOpen.getSelectedFile().exists()) {
-                String pathOpen = fcOpen.getSelectedFile().getPath();
+            File openSel = fcOpen.getSelectedFile();
+            if (openSel == null || openSel.isDirectory()) {
+                if (openSel != null) {
+                    fcOpen.setCurrentDirectory(openSel);
+                }
+            } else if (openSel.exists()) {
+                String pathOpen = openSel.getPath();
 
-                final JFileChooser fcSave = new JFileChooser();
+                final JFileChooser fcSave = createProjectFileChooser("Save IMD export");
                 fcSave.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath)));
-                fcSave.setCurrentDirectory(fcOpen.getSelectedFile().getParentFile());
-                fcSave.setFileFilter(new FileNameExtensionFilter("IMD (*.imd)", "imd"));
+                fcSave.setCurrentDirectory(openSel.getParentFile());
+                fcSave.setFileSelectionMode(JFileChooser.FILES_ONLY);
+                fcSave.setFileFilter(new DirectoryFriendlyExtensionFilter("IMD (*.imd)", "imd"));
                 fcSave.setApproveButtonText("Save");
                 fcSave.setDialogTitle("Save");
                 int returnValSave = fcSave.showOpenDialog(this);
                 if (returnValSave == JFileChooser.APPROVE_OPTION) {
-                    String pathSave = fcSave.getSelectedFile().getPath();
+                    File saveSel = fcSave.getSelectedFile();
+                    if (saveSel == null || saveSel.isDirectory()) {
+                        if (saveSel != null) {
+                            fcSave.setCurrentDirectory(saveSel);
+                        }
+                    } else {
+                    String pathSave = saveSel.getPath();
 
                     try {
                         ImdModel model = new ImdModel(pathOpen, pathSave, handler.getTileset().getMaterials());
@@ -1338,6 +1698,7 @@ public class MainFrame extends JFrame {
                                 "Can't export IMD",
                                 JOptionPane.ERROR_MESSAGE);
                     }
+                    }
                 }
             } else {
                 JOptionPane.showMessageDialog(this,
@@ -1372,60 +1733,45 @@ public class MainFrame extends JFrame {
         convDialog.setVisible(true);
         if (convDialog.getReturnValue() == ConverterDialog.APPROVE_OPTION) {
             boolean includeNsbtx = convDialog.includeNsbtxInNsbmd();
-            try {
-                final JFileChooser fcOpen = new JFileChooser();
-                fcOpen.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath) + ".imd"));
-                if (handler.getLastMapDirectoryUsed() != null) {
-                    fcOpen.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
-                }
-                fcOpen.setFileFilter(new FileNameExtensionFilter("IMD (*.imd)", "imd"));
-                fcOpen.setApproveButtonText("Open");
-                fcOpen.setDialogTitle("Open IMD Map for converting into NSBMD");
-                int returnVal = fcOpen.showOpenDialog(this);
-                if (returnVal == JFileChooser.APPROVE_OPTION) {
-                    String imdPath;
-                    if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                        imdPath = fcOpen.getSelectedFile().getPath();
-                    } else {
-                        String cwd = System.getProperty("user.dir"); // get current user directory
-                        imdPath = new File(cwd).toURI().relativize(fcOpen.getSelectedFile().toPath().toRealPath().toUri()).getPath(); //this is some serious java shit
+            final JFileChooser fcOpen = createProjectFileChooser("Open IMD for NSBMD");
+            fcOpen.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath) + ".imd"));
+            if (handler.getLastMapDirectoryUsed() != null) {
+                fcOpen.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
+            }
+            fcOpen.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            fcOpen.setFileFilter(new DirectoryFriendlyExtensionFilter("IMD (*.imd)", "imd"));
+            fcOpen.setApproveButtonText("Open");
+            fcOpen.setDialogTitle("Open IMD Map for converting into NSBMD");
+            int returnVal = fcOpen.showOpenDialog(this);
+            if (returnVal == JFileChooser.APPROVE_OPTION) {
+                File openSel = fcOpen.getSelectedFile();
+                if (openSel == null || openSel.isDirectory()) {
+                    if (openSel != null) {
+                        fcOpen.setCurrentDirectory(openSel);
                     }
-                    final JFileChooser fcSave = new JFileChooser();
+                } else {
+                    String absoluteImd = openSel.getAbsolutePath();
+                    final JFileChooser fcSave = createProjectFileChooser("Save NSBMD");
                     fcSave.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath)));
-                    fcSave.setCurrentDirectory(fcOpen.getSelectedFile().getParentFile());
-                    fcSave.setFileFilter(new FileNameExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
+                    fcSave.setCurrentDirectory(openSel.getParentFile());
+                    fcSave.setFileSelectionMode(JFileChooser.FILES_ONLY);
+                    fcSave.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBMD (*.nsbmd)", "nsbmd"));
                     fcSave.setApproveButtonText("Save");
                     fcSave.setDialogTitle("Save");
                     int returnValSave = fcSave.showOpenDialog(this);
 
                     if (returnValSave == JFileChooser.APPROVE_OPTION) {
-                        String nsbPath = fcSave.getSelectedFile().getPath();
+                        File saveSel = fcSave.getSelectedFile();
+                        if (saveSel == null || saveSel.isDirectory()) {
+                            if (saveSel != null) {
+                                fcSave.setCurrentDirectory(saveSel);
+                            }
+                        } else {
+                        String nsbPath = saveSel.getPath();
                         String filename = new File(nsbPath).getName();
 
                         try {
-                            String converterPath = "converter/g3dcvtr.exe";
-                            String[] cmd;
-                            if (System.getProperty("os.name").toLowerCase().startsWith("windows")) {
-                                if (includeNsbtx) {
-                                    cmd = new String[]{converterPath, imdPath, "-eboth", "-o", filename};
-                                } else {
-                                    cmd = new String[]{converterPath, imdPath, "-emdl", "-o", filename};
-                                }
-
-                            } else {
-                                if (includeNsbtx) {
-                                    cmd = new String[]{"wine", converterPath, imdPath, "-eboth", "-o", filename};
-                                } else {
-                                    cmd = new String[]{"wine", converterPath, imdPath, "-emdl", "-o", filename};
-                                }
-                                // NOTE: wine call works only with relative path
-                            }
-
-                            if (!Files.exists(Paths.get(converterPath))) {
-                                throw new IOException();
-                            }
-
-                            Process p = new ProcessBuilder(cmd).start();
+                            Process p = G3dcvtr.processBuilderForModel(absoluteImd, filename, includeNsbtx).start();
 
                             BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
@@ -1482,8 +1828,8 @@ public class MainFrame extends JFrame {
                             }
                         } catch (IOException ex) {
                             JOptionPane.showMessageDialog(this,
-                                    "The program \"g3dcvtr.exe\" is not found in the \"converter\" folder.\n"
-                                            + "Put the program and its *.dll files in the folder and try again.",
+                                    "Could not run g3dcvtr.exe.\nPut it under converter/ (with DLLs).\n"
+                                            + "On macOS/Linux you need Wine on your PATH.",
                                     "Converter not found",
                                     JOptionPane.ERROR_MESSAGE);
                         } catch (InterruptedException ex) {
@@ -1492,53 +1838,58 @@ public class MainFrame extends JFrame {
                                     "Problem converting the model",
                                     JOptionPane.ERROR_MESSAGE);
                         }
+                        }
                     }
                 }
-            } catch (IOException ex) {
-                JOptionPane.showMessageDialog(this,
-                        "There was a problem reading the IMD file",
-                        "Error loading the IMD file",
-                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
     public void saveMapBtxWithDialog() {
-        final JFileChooser fcOpen = new JFileChooser();
+        final JFileChooser fcOpen = createProjectFileChooser("Open IMD for NSBTX");
         fcOpen.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath) + ".imd"));
         if (handler.getLastMapDirectoryUsed() != null) {
             fcOpen.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
-        fcOpen.setFileFilter(new FileNameExtensionFilter("IMD (*.imd)", "imd"));
+        fcOpen.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fcOpen.setFileFilter(new DirectoryFriendlyExtensionFilter("IMD (*.imd)", "imd"));
         fcOpen.setApproveButtonText("Open");
         fcOpen.setDialogTitle("Open IMD Map for converting into NSBTX");
         int returnVal = fcOpen.showOpenDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
-            String imdPath = fcOpen.getSelectedFile().getPath();
+            File openSel = fcOpen.getSelectedFile();
+            if (openSel == null || openSel.isDirectory()) {
+                if (openSel != null) {
+                    fcOpen.setCurrentDirectory(openSel);
+                }
+            } else {
+                final JFileChooser fcSave = createProjectFileChooser("Save NSBTX");
+                fcSave.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath)));
+                fcSave.setCurrentDirectory(openSel.getParentFile());
+                fcSave.setFileSelectionMode(JFileChooser.FILES_ONLY);
+                fcSave.setFileFilter(new DirectoryFriendlyExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
+                fcSave.setApproveButtonText("Save");
+                fcSave.setDialogTitle("Save");
+                int returnValSave = fcSave.showOpenDialog(this);
 
-            final JFileChooser fcSave = new JFileChooser();
-            fcSave.setSelectedFile(new File(Utils.removeExtensionFromPath(handler.getMapMatrix().filePath)));
-            fcSave.setCurrentDirectory(fcOpen.getSelectedFile().getParentFile());
-            fcSave.setFileFilter(new FileNameExtensionFilter("NSBTX (*.nsbtx)", "nsbtx"));
-            fcSave.setApproveButtonText("Save");
-            fcSave.setDialogTitle("Save");
-            int returnValSave = fcSave.showOpenDialog(this);
-
-            if (returnValSave == JFileChooser.APPROVE_OPTION) {
-                String nsbPath = fcSave.getSelectedFile().getPath();
+                if (returnValSave == JFileChooser.APPROVE_OPTION) {
+                    File saveSel = fcSave.getSelectedFile();
+                    if (saveSel == null || saveSel.isDirectory()) {
+                        if (saveSel != null) {
+                            fcSave.setCurrentDirectory(saveSel);
+                        }
+                    } else {
+                String nsbPath = saveSel.getPath();
                 String filename = new File(nsbPath).getName();
+                String imdAbs = openSel.getAbsolutePath();
 
-                System.out.println(filename);
-                String converterPath = "converter/g3dcvtr.exe";
-                String[] cmd = {converterPath, imdPath, "-etex", "-o", filename};
-                Process p;
                 try {
-                    p = new ProcessBuilder(cmd).start();
+                    Process p = G3dcvtr.processBuilderForTexture(imdAbs, filename).start();
 
                     BufferedReader stdError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
 
                     StringBuilder outputString = new StringBuilder();
-                    String line = null;
+                    String line;
                     while ((line = stdError.readLine()) != null) {
                         outputString.append(line).append("\n");
                     }
@@ -1553,8 +1904,7 @@ public class MainFrame extends JFrame {
                         nsbPath += ".nsbtx";
                     }
 
-                    System.out.println(System.getProperty("user.dir"));
-                    File srcFile = new File(System.getProperty("user.dir") + "/" + filename);
+                    File srcFile = new File(System.getProperty("user.dir") + File.separator + filename);
                     File dstFile = new File(nsbPath);
                     if (srcFile.exists()) {
                         try {
@@ -1591,7 +1941,9 @@ public class MainFrame extends JFrame {
                 } catch (IOException ex) {
                     JOptionPane.showMessageDialog(this,
                             "The program \"g3dcvtr.exe\" is not found in the \"converter\" folder.\n"
-                                    + "Put the program and its *.dll files in the folder and try again.",
+                                    + "Put the program and its *.dll files in the folder and try again.\n\n"
+                                    + "On macOS/Linux you also need Wine in your PATH to run the converter.\n"
+                                    + "Example: brew install --cask wine-crossover",
                             "Converter not found",
                             JOptionPane.ERROR_MESSAGE);
                 } catch (InterruptedException ex) {
@@ -1599,6 +1951,8 @@ public class MainFrame extends JFrame {
                             "The model was not converted",
                             "Problem converting the model",
                             JOptionPane.ERROR_MESSAGE);
+                }
+                    }
                 }
             }
         }
@@ -1852,11 +2206,16 @@ public class MainFrame extends JFrame {
     }
 
     public void renderTilesetThumbnails() {
+        if (!TilesetRendererPolicy.isRuntimeEnabled()) {
+            StartupTrace.log("MainFrame.renderTilesetThumbnails: skipping TilesetRenderer runtime");
+            return;
+        }
+        StartupTrace.log("MainFrame.renderTilesetThumbnails: TilesetRenderer runtime enabled");
         GLContext context = mapDisplay.getContext();
         TilesetRenderer tr = new TilesetRenderer(handler.getTileset());
         try {
             tr.renderTiles();
-        } catch (NullPointerException e) {
+        } catch (Throwable e) {
             e.printStackTrace();
         }
         tr.destroy();
@@ -1959,15 +2318,14 @@ public class MainFrame extends JFrame {
         updateRecentMapsMenu();
     }
 
-    public void updateMapDisplaySize(){
-        if(mapDisplay.getViewMode() == ViewMode.VIEW_3D_MODE){
-            mapDisplay.setPreferredSize(mapDisplayContainer.getSize());
-            mapDisplayContainer.revalidate();
-        }else{
-            int size = Math.min(mapDisplayContainer.getWidth(), mapDisplayContainer.getHeight());
-            mapDisplay.setPreferredSize(new Dimension(size, size));
-            mapDisplayContainer.revalidate();
+    public void updateMapDisplaySize() {
+        if (mapDisplay == null || mapDisplayContainer == null) {
+            return;
         }
+
+        // Do not set preferred size here.
+        // The parent layout owns the viewport size; the renderer must adapt.
+        mapDisplay.repaint();
     }
 
     private static void loadRecentMaps() {
@@ -2008,170 +2366,458 @@ public class MainFrame extends JFrame {
         thumbnailLayerSelector.repaint();
     }
 
-
-
-
-
-
-
-
-
     private void initComponents() {
+        traceInit("ENTER");
         // JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents
+        traceInit("before new JMenuBar (jmMainMenu)");
         jmMainMenu = new JMenuBar();
+        traceInit("after new JMenuBar (jmMainMenu)");
+        traceInit("before new JMenu (jmFile)");
         jmFile = new JMenu();
+        traceInit("after new JMenu (jmFile)");
+        traceInit("before new JMenuItem (jmiNewMap)");
         jmiNewMap = new JMenuItem();
+        traceInit("after new JMenuItem (jmiNewMap)");
+        traceInit("before new JMenuItem (jmiOpenMap)");
         jmiOpenMap = new JMenuItem();
+        traceInit("after new JMenuItem (jmiOpenMap)");
+        traceInit("before new JMenu (jmiOpenRecentMap)");
         jmiOpenRecentMap = new JMenu();
+        traceInit("after new JMenu (jmiOpenRecentMap)");
+        traceInit("before new JMenuItem (jmiClearHistory)");
         jmiClearHistory = new JMenuItem();
+        traceInit("after new JMenuItem (jmiClearHistory)");
+        traceInit("before new JMenuItem (jmiSaveMap)");
         jmiSaveMap = new JMenuItem();
+        traceInit("after new JMenuItem (jmiSaveMap)");
+        traceInit("before new JMenuItem (jmiSaveMapAs)");
         jmiSaveMapAs = new JMenuItem();
+        traceInit("after new JMenuItem (jmiSaveMapAs)");
+        traceInit("before new JMenuItem (jmiAddMaps)");
         jmiAddMaps = new JMenuItem();
+        traceInit("after new JMenuItem (jmiAddMaps)");
+        traceInit("before new JMenuItem (jmiExportObjWithText)");
         jmiExportObjWithText = new JMenuItem();
+        traceInit("after new JMenuItem (jmiExportObjWithText)");
+        traceInit("before new JMenuItem (jmiExportMapAsImd)");
         jmiExportMapAsImd = new JMenuItem();
+        traceInit("after new JMenuItem (jmiExportMapAsImd)");
+        traceInit("before new JMenuItem (jmiExportMapAsNsb)");
         jmiExportMapAsNsb = new JMenuItem();
+        traceInit("after new JMenuItem (jmiExportMapAsNsb)");
+        traceInit("before new JMenuItem (jmiExportMapBtx)");
         jmiExportMapBtx = new JMenuItem();
+        traceInit("after new JMenuItem (jmiExportMapBtx)");
+        traceInit("before new JMenuItem (jmiImportTileset)");
         jmiImportTileset = new JMenuItem();
+        traceInit("after new JMenuItem (jmiImportTileset)");
+        traceInit("before new JMenuItem (jmiExportTileset)");
         jmiExportTileset = new JMenuItem();
+        traceInit("after new JMenuItem (jmiExportTileset)");
+        traceInit("before new JMenuItem (jmiExportAllTiles)");
         jmiExportAllTiles = new JMenuItem();
+        traceInit("after new JMenuItem (jmiExportAllTiles)");
+        traceInit("before new JMenu (jmEdit)");
         jmEdit = new JMenu();
+        traceInit("after new JMenu (jmEdit)");
+        traceInit("before new JMenuItem (jmiUndo)");
         jmiUndo = new JMenuItem();
+        traceInit("after new JMenuItem (jmiUndo)");
+        traceInit("before new JMenuItem (jmiRedo)");
         jmiRedo = new JMenuItem();
+        traceInit("after new JMenuItem (jmiRedo)");
+        traceInit("before new JMenuItem (jmiClearLayer)");
         jmiClearLayer = new JMenuItem();
+        traceInit("after new JMenuItem (jmiClearLayer)");
+        traceInit("before new JMenuItem (jmiClearAllLayers)");
         jmiClearAllLayers = new JMenuItem();
+        traceInit("after new JMenuItem (jmiClearAllLayers)");
+        traceInit("before new JMenuItem (jmiCopyLayer)");
         jmiCopyLayer = new JMenuItem();
+        traceInit("after new JMenuItem (jmiCopyLayer)");
+        traceInit("before new JMenuItem (jmiPasteLayer)");
         jmiPasteLayer = new JMenuItem();
+        traceInit("after new JMenuItem (jmiPasteLayer)");
+        traceInit("before new JMenuItem (jmiPasteLayerTiles)");
         jmiPasteLayerTiles = new JMenuItem();
+        traceInit("after new JMenuItem (jmiPasteLayerTiles)");
+        traceInit("before new JMenuItem (jmiPasteLayerHeights)");
         jmiPasteLayerHeights = new JMenuItem();
+        traceInit("after new JMenuItem (jmiPasteLayerHeights)");
+        traceInit("before new JMenuItem (menuItem1)");
         menuItem1 = new JMenuItem();
+        traceInit("after new JMenuItem (menuItem1)");
+        traceInit("before new JMenu (jmView)");
         jmView = new JMenu();
+        traceInit("after new JMenu (jmView)");
+        traceInit("before new JMenuItem (jmi3dView)");
         jmi3dView = new JMenuItem();
+        traceInit("after new JMenuItem (jmi3dView)");
+        traceInit("before new JMenuItem (jmiTopView)");
         jmiTopView = new JMenuItem();
+        traceInit("after new JMenuItem (jmiTopView)");
+        traceInit("before new JMenuItem (jmiHeightView)");
         jmiHeightView = new JMenuItem();
+        traceInit("after new JMenuItem (jmiHeightView)");
+        traceInit("before new JMenuItem (jmiToggleGrid)");
         jmiToggleGrid = new JMenuItem();
+        traceInit("after new JMenuItem (jmiToggleGrid)");
+        traceInit("before new JMenuItem (jmiLoadBackImg)");
         jmiLoadBackImg = new JMenuItem();
+        traceInit("after new JMenuItem (jmiLoadBackImg)");
+        traceInit("before new JCheckBoxMenuItem (jcbUseBackImage)");
         jcbUseBackImage = new JCheckBoxMenuItem();
+        traceInit("after new JCheckBoxMenuItem (jcbUseBackImage)");
+        traceInit("before new JMenu (jmTools)");
         jmTools = new JMenu();
+        traceInit("after new JMenu (jmTools)");
+        traceInit("before new JMenuItem (jmiTilesetEditor)");
         jmiTilesetEditor = new JMenuItem();
+        traceInit("after new JMenuItem (jmiTilesetEditor)");
+        traceInit("before new JMenuItem (jmiCollisionEditor)");
         jmiCollisionEditor = new JMenuItem();
+        traceInit("after new JMenuItem (jmiCollisionEditor)");
+        traceInit("before new JMenuItem (jmiBdhcEditor)");
         jmiBdhcEditor = new JMenuItem();
+        traceInit("after new JMenuItem (jmiBdhcEditor)");
+        traceInit("before new JMenuItem (jmiBDHCAM)");
         jmiBDHCAM = new JMenuItem();
+        traceInit("after new JMenuItem (jmiBDHCAM)");
+        traceInit("before new JMenuItem (jmiNsbtxEditor)");
         jmiNsbtxEditor = new JMenuItem();
+        traceInit("after new JMenuItem (jmiNsbtxEditor)");
+        traceInit("before new JMenuItem (jMenuItem1)");
         jMenuItem1 = new JMenuItem();
+        traceInit("after new JMenuItem (jMenuItem1)");
+        traceInit("before new JMenuItem (jmiAnimationEditor)");
         jmiAnimationEditor = new JMenuItem();
+        traceInit("after new JMenuItem (jmiAnimationEditor)");
+        traceInit("before new JMenuItem (jmiDumpTilesetAsPngs)");
+        jmiDumpTilesetAsPngs = new JMenuItem();
+        traceInit("after new JMenuItem (jmiDumpTilesetAsPngs)");
+        traceInit("before new JMenu (jmHelp)");
         jmHelp = new JMenu();
+        traceInit("after new JMenu (jmHelp)");
+        traceInit("before new JMenuItem (jmiKeyboardInfo)");
         jmiKeyboardInfo = new JMenuItem();
+        traceInit("after new JMenuItem (jmiKeyboardInfo)");
+        traceInit("before new JMenuItem (jmiAbout)");
         jmiAbout = new JMenuItem();
+        traceInit("after new JMenuItem (jmiAbout)");
+        traceInit("before new JToolBar (jtMainToolbar)");
         jtMainToolbar = new JToolBar();
+        traceInit("after new JToolBar (jtMainToolbar)");
+        traceInit("before new JButton (jbNewMap)");
         jbNewMap = new JButton();
+        traceInit("after new JButton (jbNewMap)");
+        traceInit("before new JButton (jbOpenMap)");
         jbOpenMap = new JButton();
+        traceInit("after new JButton (jbOpenMap)");
+        traceInit("before new JButton (jbSaveMap)");
         jbSaveMap = new JButton();
+        traceInit("after new JButton (jbSaveMap)");
+        traceInit("before new JButton (jbAddMaps)");
         jbAddMaps = new JButton();
+        traceInit("after new JButton (jbAddMaps)");
+        traceInit("before new JButton (jbUndo)");
         jbUndo = new JButton();
+        traceInit("after new JButton (jbUndo)");
+        traceInit("before new JButton (jbRedo)");
         jbRedo = new JButton();
+        traceInit("after new JButton (jbRedo)");
+        traceInit("before new JButton (jbExportObj)");
         jbExportObj = new JButton();
+        traceInit("after new JButton (jbExportObj)");
+        traceInit("before new JButton (jbExportImd)");
         jbExportImd = new JButton();
+        traceInit("after new JButton (jbExportImd)");
+        traceInit("before new JButton (jbExportNsb)");
         jbExportNsb = new JButton();
+        traceInit("after new JButton (jbExportNsb)");
+        traceInit("before new JButton (jbExportBin)");
         jbExportBin = new JButton();
+        traceInit("after new JButton (jbExportBin)");
+        traceInit("before new JButton (jbExportNsb1)");
         jbExportNsb1 = new JButton();
+        traceInit("after new JButton (jbExportNsb1)");
+        traceInit("before new JButton (jbExportNsb2)");
         jbExportNsb2 = new JButton();
+        traceInit("after new JButton (jbExportNsb2)");
+        traceInit("before new JButton (jbTilelistEditor)");
         jbTilelistEditor = new JButton();
+        traceInit("after new JButton (jbTilelistEditor)");
+        traceInit("before new JButton (jbCollisionsEditor)");
         jbCollisionsEditor = new JButton();
+        traceInit("after new JButton (jbCollisionsEditor)");
+        traceInit("before new JButton (jbBdhcEditor)");
         jbBdhcEditor = new JButton();
+        traceInit("after new JButton (jbBdhcEditor)");
+        traceInit("before new JButton (jbBdhcamEditor)");
         jbBdhcamEditor = new JButton();
+        traceInit("after new JButton (jbBdhcamEditor)");
+        traceInit("before new JButton (jbBacksoundEditor)");
         jbBacksoundEditor = new JButton();
+        traceInit("after new JButton (jbBacksoundEditor)");
+        traceInit("before new JButton (jbNsbtxEditor1)");
         jbNsbtxEditor1 = new JButton();
+        traceInit("after new JButton (jbNsbtxEditor1)");
+        traceInit("before new JButton (jbBuildingEditor)");
         jbBuildingEditor = new JButton();
+        traceInit("after new JButton (jbBuildingEditor)");
+        traceInit("before new JButton (jbAnimationEditor)");
         jbAnimationEditor = new JButton();
+        traceInit("after new JButton (jbAnimationEditor)");
+        traceInit("before new JButton (jbSettings)");
         jbSettings = new JButton();
+        traceInit("after new JButton (jbSettings)");
+        traceInit("before new JButton (jbKeboardInfo)");
         jbKeboardInfo = new JButton();
+        traceInit("after new JButton (jbKeboardInfo)");
+        traceInit("before new JButton (jbHelp)");
         jbHelp = new JButton();
+        traceInit("after new JButton (jbHelp)");
+        traceInit("before new JPanel (jpGameInfo)");
         jpGameInfo = new JPanel();
+        traceInit("after new JPanel (jpGameInfo)");
+        traceInit("before new JLabel (jlGame)");
         jlGame = new JLabel();
+        traceInit("after new JLabel (jlGame)");
+        traceInit("before new JLabel (jlGameIcon)");
         jlGameIcon = new JLabel();
+        traceInit("after new JLabel (jlGameIcon)");
+        traceInit("before new JLabel (jlGameName)");
         jlGameName = new JLabel();
+        traceInit("after new JLabel (jlGameName)");
+        traceInit("before new JSplitPane (jspMainWindow)");
         jspMainWindow = new JSplitPane();
+        traceInit("after new JSplitPane (jspMainWindow)");
+        traceInit("before new JPanel (jpMainWindow)");
         jpMainWindow = new JPanel();
+        traceInit("after new JPanel (jpMainWindow)");
+        traceInit("before new JPanel (jpLayer)");
         jpLayer = new JPanel();
+        traceInit("after new JPanel (jpLayer)");
+        traceInit("before new ThumbnailLayerSelector (thumbnailLayerSelector)");
         thumbnailLayerSelector = new ThumbnailLayerSelector();
+        traceInit("after new ThumbnailLayerSelector (thumbnailLayerSelector)");
+        traceInit("before new JPanel (mapDisplayContainer)");
         mapDisplayContainer = new JPanel();
+        traceInit("after new JPanel (mapDisplayContainer)");
+        traceInit("before new MapDisplay (mapDisplay)");
         mapDisplay = new MapDisplay();
+        traceInit("after new MapDisplay (mapDisplay)");
+        traceInit("before new JPanel (jpZ)");
         jpZ = new JPanel();
+        traceInit("after new JPanel (jpZ)");
+        traceInit("before new HeightSelector (heightSelector)");
         heightSelector = new HeightSelector();
+        traceInit("after new HeightSelector (heightSelector)");
+        traceInit("before new JPanel (jpTileList)");
         jpTileList = new JPanel();
+        traceInit("after new JPanel (jpTileList)");
+        traceInit("before new JScrollPane (jscTileList)");
         jscTileList = new JScrollPane();
+        traceInit("after new JScrollPane (jscTileList)");
+        traceInit("before new TileSelector (tileSelector)");
         tileSelector = new TileSelector();
+        traceInit("after new TileSelector (tileSelector)");
+        traceInit("before new JPanel (jpSmartDrawing)");
         jpSmartDrawing = new JPanel();
+        traceInit("after new JPanel (jpSmartDrawing)");
+        traceInit("before new JScrollPane (jscSmartDrawing)");
         jscSmartDrawing = new JScrollPane();
+        traceInit("after new JScrollPane (jscSmartDrawing)");
+        traceInit("before new SmartGridDisplay (smartGridDisplay)");
         smartGridDisplay = new SmartGridDisplay();
+        traceInit("after new SmartGridDisplay (smartGridDisplay)");
+        traceInit("before new JPanel (jpButtons)");
         jpButtons = new JPanel();
+        traceInit("after new JPanel (jpButtons)");
+        traceInit("before new JPanel (jpView)");
         jpView = new JPanel();
+        traceInit("after new JPanel (jpView)");
+        traceInit("before new JToolBar (jtView)");
         jtView = new JToolBar();
+        traceInit("after new JToolBar (jtView)");
+        traceInit("before new JToggleButton (jtbView3D)");
         jtbView3D = new JToggleButton();
+        traceInit("after new JToggleButton (jtbView3D)");
+        traceInit("before new JToggleButton (jtbViewOrtho)");
         jtbViewOrtho = new JToggleButton();
+        traceInit("after new JToggleButton (jtbViewOrtho)");
+        traceInit("before new JToggleButton (jtbViewHeight)");
         jtbViewHeight = new JToggleButton();
+        traceInit("after new JToggleButton (jtbViewHeight)");
+        traceInit("before new JToggleButton (jtbViewGrid)");
         jtbViewGrid = new JToggleButton();
+        traceInit("after new JToggleButton (jtbViewGrid)");
+        traceInit("before new JToggleButton (jtbViewWireframe)");
         jtbViewWireframe = new JToggleButton();
+        traceInit("after new JToggleButton (jtbViewWireframe)");
+        traceInit("before new JPanel (jpTools)");
         jpTools = new JPanel();
+        traceInit("after new JPanel (jpTools)");
+        traceInit("before new JToolBar (jtTools)");
         jtTools = new JToolBar();
+        traceInit("after new JToolBar (jtTools)");
+        traceInit("before new JToggleButton (jtbModeEdit)");
         jtbModeEdit = new JToggleButton();
+        traceInit("after new JToggleButton (jtbModeEdit)");
+        traceInit("before new JToggleButton (jtbModeClear)");
         jtbModeClear = new JToggleButton();
+        traceInit("after new JToggleButton (jtbModeClear)");
+        traceInit("before new JToggleButton (jtbModeSmartPaint)");
         jtbModeSmartPaint = new JToggleButton();
+        traceInit("after new JToggleButton (jtbModeSmartPaint)");
+        traceInit("before new JToggleButton (jtbModeInvSmartPaint)");
         jtbModeInvSmartPaint = new JToggleButton();
+        traceInit("after new JToggleButton (jtbModeInvSmartPaint)");
+        traceInit("before new JToggleButton (jtbModeMove)");
         jtbModeMove = new JToggleButton();
+        traceInit("after new JToggleButton (jtbModeMove)");
+        traceInit("before new JToggleButton (jtbModeZoom)");
         jtbModeZoom = new JToggleButton();
+        traceInit("after new JToggleButton (jtbModeZoom)");
+        traceInit("before new JButton (jbFitCameraToMap)");
         jbFitCameraToMap = new JButton();
+        traceInit("after new JButton (jbFitCameraToMap)");
+        traceInit("before new JPanel (jpRightPanel)");
         jpRightPanel = new JPanel();
+        traceInit("after new JPanel (jpRightPanel)");
+        traceInit("before new JTabbedPane (jtRightPanel)");
         jtRightPanel = new JTabbedPane();
+        traceInit("after new JTabbedPane (jtRightPanel)");
+        traceInit("before new JPanel (jPanelMatrixInfo)");
         jPanelMatrixInfo = new JPanel();
+        traceInit("after new JPanel (jPanelMatrixInfo)");
+        traceInit("before new JSplitPane (jspMatrix)");
         jspMatrix = new JSplitPane();
+        traceInit("after new JSplitPane (jspMatrix)");
+        traceInit("before new JPanel (jpAreaTools)");
         jpAreaTools = new JPanel();
+        traceInit("after new JPanel (jpAreaTools)");
+        traceInit("before new JScrollPane (jScrollPaneMapMatrix)");
         jScrollPaneMapMatrix = new JScrollPane();
+        traceInit("after new JScrollPane (jScrollPaneMapMatrix)");
+        traceInit("before new MapMatrixDisplay (mapMatrixDisplay)");
         mapMatrixDisplay = new MapMatrixDisplay();
+        traceInit("after new MapMatrixDisplay (mapMatrixDisplay)");
+        traceInit("before new JPanel (jpArea)");
         jpArea = new JPanel();
+        traceInit("after new JPanel (jpArea)");
+        traceInit("before new JLabel (jlArea)");
         jlArea = new JLabel();
+        traceInit("after new JLabel (jlArea)");
+        traceInit("before new JSpinner (jsSelectedArea)");
         jsSelectedArea = new JSpinner();
+        traceInit("after new JSpinner (jsSelectedArea)");
+        traceInit("before new JPanel (jPanelAreaColor)");
         jPanelAreaColor = new JPanel();
+        traceInit("after new JPanel (jPanelAreaColor)");
+        traceInit("before new JPanel (jpMoveMap)");
         jpMoveMap = new JPanel();
+        traceInit("after new JPanel (jpMoveMap)");
+        traceInit("before new MoveMapPanel (moveMapPanel)");
         moveMapPanel = new MoveMapPanel();
+        traceInit("after new MoveMapPanel (moveMapPanel)");
+        traceInit("before new JPanel (jpTileSelected)");
         jpTileSelected = new JPanel();
+        traceInit("after new JPanel (jpTileSelected)");
+        traceInit("before new TileDisplay (tileDisplay)");
         tileDisplay = new TileDisplay();
+        traceInit("after new TileDisplay (tileDisplay)");
+        traceInit("before new JPanel (jPanelMapTools)");
         jPanelMapTools = new JPanel();
+        traceInit("after new JPanel (jPanelMapTools)");
+        traceInit("before new JPanel (jpHeightMapAlpha)");
         jpHeightMapAlpha = new JPanel();
+        traceInit("after new JPanel (jpHeightMapAlpha)");
+        traceInit("before new JSlider (jsHeightMapAlpha)");
         jsHeightMapAlpha = new JSlider();
+        traceInit("after new JSlider (jsHeightMapAlpha)");
+        traceInit("before new JPanel (jpBackImageAlpha)");
         jpBackImageAlpha = new JPanel();
+        traceInit("after new JPanel (jpBackImageAlpha)");
+        traceInit("before new JSlider (jsBackImageAlpha)");
         jsBackImageAlpha = new JSlider();
+        traceInit("after new JSlider (jsBackImageAlpha)");
+        traceInit("before new JPanel (jpMoveLayer)");
         jpMoveLayer = new JPanel();
+        traceInit("after new JPanel (jpMoveLayer)");
+        traceInit("before new JPanel (jpDirectionalPad)");
         jpDirectionalPad = new JPanel();
+        traceInit("after new JPanel (jpDirectionalPad)");
+        traceInit("before new JButton (jbMoveMapUp)");
         jbMoveMapUp = new JButton();
+        traceInit("after new JButton (jbMoveMapUp)");
+        traceInit("before new JButton (jbMoveMapLeft)");
         jbMoveMapLeft = new JButton();
+        traceInit("after new JButton (jbMoveMapLeft)");
+        traceInit("before new JButton (jbMoveMapRight)");
         jbMoveMapRight = new JButton();
+        traceInit("after new JButton (jbMoveMapRight)");
+        traceInit("before new JButton (jbMoveMapDown)");
         jbMoveMapDown = new JButton();
+        traceInit("after new JButton (jbMoveMapDown)");
+        traceInit("before new JPanel (jpZPad)");
         jpZPad = new JPanel();
+        traceInit("after new JPanel (jpZPad)");
+        traceInit("before new JButton (jbMoveMapUpZ)");
         jbMoveMapUpZ = new JButton();
+        traceInit("after new JButton (jbMoveMapUpZ)");
+        traceInit("before new JButton (jbMoveMapDownZ)");
         jbMoveMapDownZ = new JButton();
+        traceInit("after new JButton (jbMoveMapDownZ)");
+        traceInit("before new JCheckBox (jcbRealTimePolyGrouping)");
         jcbRealTimePolyGrouping = new JCheckBox();
+        traceInit("after new JCheckBox (jcbRealTimePolyGrouping)");
+        traceInit("before new JCheckBox (jcbViewAreas)");
         jcbViewAreas = new JCheckBox();
+        traceInit("after new JCheckBox (jcbViewAreas)");
+        traceInit("before new JCheckBox (jcbViewGridsBorders)");
         jcbViewGridsBorders = new JCheckBox();
+        traceInit("after new JCheckBox (jcbViewGridsBorders)");
+        traceInit("before new JPanel (jpStatusBar)");
         jpStatusBar = new JPanel();
+        traceInit("after new JPanel (jpStatusBar)");
+        traceInit("before new JLabel (jLabel4)");
         jLabel4 = new JLabel();
+        traceInit("after new JLabel (jLabel4)");
+        traceInit("before new JLabel (jLabel6)");
         jLabel6 = new JLabel();
+        traceInit("after new JLabel (jLabel6)");
+        traceInit("before new JLabel (jlMapCoords)");
         jlMapCoords = new JLabel();
+        traceInit("after new JLabel (jlMapCoords)");
+        traceInit("before new JLabel (jLabel2)");
         jLabel2 = new JLabel();
+        traceInit("after new JLabel (jLabel2)");
+        traceInit("before new JLabel (jlNumPolygons)");
         jlNumPolygons = new JLabel();
+        traceInit("after new JLabel (jlNumPolygons)");
+        traceInit("before new JLabel (jLabel5)");
         jLabel5 = new JLabel();
+        traceInit("after new JLabel (jLabel5)");
+        traceInit("before new JLabel (jlNumMaterials)");
         jlNumMaterials = new JLabel();
+        traceInit("after new JLabel (jlNumMaterials)");
 
+
+        traceInit("component field declarations complete");
         //======== this ========
+        traceInit("before setDefaultCloseOperation / setTitle");
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setTitle("Pokemon DS Map Studio");
+        traceInit("before addWindowListener(WindowAdapter)");
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
                 formWindowClosing(e);
             }
         });
+        traceInit("after addWindowListener");
         Container contentPane = getContentPane();
+        traceInit("before contentPane.setLayout(MigLayout)");
         contentPane.setLayout(new MigLayout(
             "insets 0,hidemode 3,gap 5 5",
             // columns
@@ -2180,7 +2826,9 @@ public class MainFrame extends JFrame {
             "[fill]" +
             "[grow,fill]" +
             "[fill]"));
+        traceInit("after contentPane.setLayout(MigLayout)");
 
+        traceInit("before building jmMainMenu tree");
         //======== jmMainMenu ========
         {
 
@@ -2414,6 +3062,12 @@ public class MainFrame extends JFrame {
                 jmiTilesetEditor.setMnemonic('T');
                 jmiTilesetEditor.addActionListener(e -> jmiTilesetEditorActionPerformed(e));
                 jmTools.add(jmiTilesetEditor);
+
+                //---- jmiDumpTilesetAsPngs ----
+                jmiDumpTilesetAsPngs.setIcon(new ImageIcon(getClass().getResource("/icons/ExportIcon.png")));
+                jmiDumpTilesetAsPngs.setText("Dump Tileset as PNGs...");
+                jmiDumpTilesetAsPngs.addActionListener(e -> jmiDumpTilesetAsPngsActionPerformed(e));
+                jmTools.add(jmiDumpTilesetAsPngs);
 
                 //---- jmiCollisionEditor ----
                 jmiCollisionEditor.setText("Collision Editor");
@@ -2827,6 +3481,7 @@ public class MainFrame extends JFrame {
         }
         contentPane.add(jpGameInfo, "cell 0 0,alignx right,grow 0 100,gapx 5 5,gapy 5 5");
 
+        traceInit("before jspMainWindow / jpMainWindow layout");
         //======== jspMainWindow ========
         {
             jspMainWindow.setResizeWeight(0.8);
@@ -2879,6 +3534,7 @@ public class MainFrame extends JFrame {
                 }
                 jpMainWindow.add(jpLayer, "cell 0 0");
 
+                traceInit("before mapDisplayContainer / mapDisplay wiring");
                 //======== mapDisplayContainer ========
                 {
                     mapDisplayContainer.addComponentListener(new ComponentAdapter() {
@@ -2887,27 +3543,22 @@ public class MainFrame extends JFrame {
                             mapDisplayContainerComponentResized(e);
                         }
                     });
-                    mapDisplayContainer.setLayout(new FlowLayout());
+                    mapDisplayContainer.setLayout(new BorderLayout());
+                    mapDisplayContainer.setPreferredSize(new Dimension(544, 544));
+                    mapDisplayContainer.setMinimumSize(new Dimension(256, 256));
 
                     //======== mapDisplay ========
+                    // GLCanvas is not a Container: border/layout apply to mapDisplayContainer / wrapper only.
                     {
-                        mapDisplay.setBorder(new LineBorder(new Color(102, 102, 102)));
-                        mapDisplay.setMaximumSize(new Dimension(544, 544));
-
-                        GroupLayout mapDisplayLayout = new GroupLayout(mapDisplay);
-                        mapDisplay.setLayout(mapDisplayLayout);
-                        mapDisplayLayout.setHorizontalGroup(
-                            mapDisplayLayout.createParallelGroup()
-                                .addGap(0, 542, Short.MAX_VALUE)
-                        );
-                        mapDisplayLayout.setVerticalGroup(
-                            mapDisplayLayout.createParallelGroup()
-                                .addGap(0, 542, Short.MAX_VALUE)
-                        );
+                        traceInit("before mapDisplay container border (GLCanvas)");
+                        mapDisplayContainer.setBorder(new LineBorder(new Color(102, 102, 102)));
+                        traceInit("after mapDisplay container border");
                     }
-                    mapDisplayContainer.add(mapDisplay);
+                    traceInit("before mapDisplayContainer.add(mapDisplay)");
+                    mapDisplayContainer.add(mapDisplay, BorderLayout.CENTER);
+                    traceInit("after mapDisplayContainer.add(mapDisplay)");
                 }
-                jpMainWindow.add(mapDisplayContainer, "cell 2 0,dock center");
+                jpMainWindow.add(mapDisplayContainer, "cell 2 0,grow,push");
 
                 //======== jpZ ========
                 {
@@ -3561,6 +4212,7 @@ public class MainFrame extends JFrame {
         buttonGroupDrawMode.add(jtbModeMove);
         buttonGroupDrawMode.add(jtbModeZoom);
         // JFormDesigner - End of component initialization  //GEN-END:initComponents
+        traceInit("EXIT");
     }
 
     // JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables
@@ -3599,6 +4251,7 @@ public class MainFrame extends JFrame {
     private JCheckBoxMenuItem jcbUseBackImage;
     private JMenu jmTools;
     private JMenuItem jmiTilesetEditor;
+    private JMenuItem jmiDumpTilesetAsPngs;
     private JMenuItem jmiCollisionEditor;
     private JMenuItem jmiBdhcEditor;
     private JMenuItem jmiBDHCAM;

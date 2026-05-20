@@ -20,6 +20,7 @@ import tileset.TextureNotFoundException;
 import tileset.Tileset;
 import tileset.TilesetIO;
 import utils.Utils;
+import utils.StartupTrace;
 
 
 /**
@@ -75,13 +76,17 @@ public class GameSelectorDialog extends JDialog {
                         defaultTsetsFolderPaths[tilesetIndex] + "/"
                                 + defaultTsetsNames[tilesetIndex]);
 
-                TilesetRenderer tr = new TilesetRenderer(tileset);
-                try {
-                    tr.renderTiles();
-                } catch (NullPointerException ex) {
-                    ex.printStackTrace();
+                if (utils.TilesetRendererPolicy.isRuntimeEnabled()) {
+                    TilesetRenderer tr = new TilesetRenderer(tileset);
+                    try {
+                        tr.renderTiles();
+                    } catch (Throwable ex) {
+                        ex.printStackTrace();
+                    }
+                    tr.destroy();
+                } else {
+                    StartupTrace.log("Skipping TilesetRenderer at GameSelectorDialog (tileset load)");
                 }
-                tr.destroy();
             } catch (NullPointerException | TextureNotFoundException | IOException ex) {
                 System.out.println("Tileset not found");
                 tileset = new Tileset();
