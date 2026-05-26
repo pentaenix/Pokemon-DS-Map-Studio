@@ -79,6 +79,10 @@ public class BdhcamCameraDisplay extends GLJPanel implements GLEventListener, Mo
     };
     protected Texture playerTexture;
 
+    protected int glViewportX = 0;
+    protected int glViewportY = 0;
+    protected int glViewportSize = 1;
+
     public BdhcamCameraDisplay(){
         //Set default display size
         setPreferredSize(new Dimension(width, height));
@@ -105,15 +109,6 @@ public class BdhcamCameraDisplay extends GLJPanel implements GLEventListener, Mo
     public void init(GLAutoDrawable drawable) {
         glu = new GLU();
 
-        //grid = Generator.generateCenteredGrid(cols, rows, gridTileSize, 0.02f);
-        //gridBuffer = Buffers.newDirectFloatBuffer(grid);
-        //axis = Generator.generateAxis(100.0f);
-
-        //Load textures into OpenGL
-        handler.getTileset().loadTexturesGL();
-        handler.getBorderMapsTileset().loadTexturesGL();
-        loadPlayerTextureGL();
-
         drawable.getGL().getGL2().glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
 
         //Scene
@@ -136,6 +131,10 @@ public class BdhcamCameraDisplay extends GLJPanel implements GLEventListener, Mo
         GL2 gl = drawable.getGL().getGL2();
 
         gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        if (handler == null) {
+            return;
+        }
 
         if (updateRequested) {
 
@@ -179,8 +178,16 @@ public class BdhcamCameraDisplay extends GLJPanel implements GLEventListener, Mo
     }
 
     @Override
-    public void reshape(GLAutoDrawable glAutoDrawable, int i, int i1, int i2, int i3) {
-
+    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        GL2 gl = drawable.getGL().getGL2();
+        int size = Math.max(1, Math.min(w, h));
+        glViewportX = Math.max(0, (w - size) / 2);
+        glViewportY = Math.max(0, (h - size) / 2);
+        glViewportSize = size;
+        gl.glViewport(glViewportX, glViewportY, glViewportSize, glViewportSize);
     }
 
     @Override
@@ -241,7 +248,8 @@ public class BdhcamCameraDisplay extends GLJPanel implements GLEventListener, Mo
     protected void applyCameraTransform(GL2 gl) {
         gl.glLoadIdentity();
 
-        float aspect = (float) getWidth() / (float) getHeight();
+        float aspect = glViewportSize > 0 ? 1.0f
+                : (float) getWidth() / (float) Math.max(1, getHeight());
         if (cameraZ < 40.0f) {
             glu.gluPerspective(15.0f, aspect, 1.0f, 1000.0f);
         } else {
@@ -482,6 +490,13 @@ public class BdhcamCameraDisplay extends GLJPanel implements GLEventListener, Mo
     public void setHandler(MapEditorHandler handler, BdhcamHandler bdhcamHandler) {
         this.handler = handler;
         this.bdhcamHandler = bdhcamHandler;
+        if (handler != null) {
+            handler.getTileset().loadTexturesGL();
+            handler.getBorderMapsTileset().loadTexturesGL();
+            loadPlayerTextureGL();
+            updateRequested = true;
+            repaint();
+        }
     }
 
     public void requestUpdate(){

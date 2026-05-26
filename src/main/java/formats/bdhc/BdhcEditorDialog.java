@@ -649,11 +649,11 @@ public class BdhcEditorDialog extends JDialog {
                     "0[grow,fill]0",
                     // rows
                     "0[grow,fill]0" +
-                    "[grow,fill]0" +
                     "[]"));
 
                 //---- bdhcDisplay3D ----
-                bdhcDisplay3D.setPreferredSize(new Dimension(200, 512));
+                bdhcDisplay3D.setPreferredSize(new Dimension(512, 512));
+                bdhcDisplay3D.setMinimumSize(new Dimension(256, 256));
                 bdhcDisplay3D.setBorder(new LineBorder(Color.lightGray));
                 panel3.add(bdhcDisplay3D, "cell 0 0");
 

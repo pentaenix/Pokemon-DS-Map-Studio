@@ -5,6 +5,7 @@ import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -70,12 +71,19 @@ import tileset.*;
 import utils.StartupTrace;
 import utils.TilesetRendererPolicy;
 import utils.Utils;
+import resort.integration.ResortController;
+import resort.integration.ResortTilesetBinding;
+import resort.bake.RbmapGridImporter;
+import resort.formats.RtpksReader;
+import resort.runtimeformat.RbmapDocument;
 
 /**
  * @author Trifindo, JackHack96
  */
 public class MainFrame extends JFrame {
     MapEditorHandler handler;
+    private ResortController resortController;
+    private JLabel jlResortStatus;
     public static Preferences prefs = Preferences.userNodeForPackage(MainFrame.class);
     private static final List<String> recentMaps = new ArrayList<>();
     private boolean opened_map = false;
@@ -234,6 +242,12 @@ public class MainFrame extends JFrame {
         handler.updateAllMapThumbnails();
         mapMatrixDisplay.updateMapsImage();
 
+        jlResortStatus = new JLabel("RTPKS: (none)");
+        jpStatusBar.add(jlResortStatus);
+        resortController = new ResortController(this, handler);
+        resortController.installMenu(getJMenuBar());
+        updateResortStatus();
+
         applyInitialSplitAndMinSize();
 
         StartupTrace.log("MainFrame.<init>: exit");
@@ -266,7 +280,7 @@ public class MainFrame extends JFrame {
     }
 
     private void jmiSaveMapActionPerformed(ActionEvent e) {
-        if (handler.getMapMatrix().filePath.isEmpty()) {
+        if (!hasPersistableMapPath()) {
             saveMapWithDialog();
         } else {
             saveMap();
@@ -423,7 +437,7 @@ public class MainFrame extends JFrame {
     }
 
     private void jbSaveMapActionPerformed(ActionEvent e) {
-        if (handler.getMapMatrix().filePath.isEmpty()) {
+        if (!hasPersistableMapPath()) {
             saveMapWithDialog();
         } else {
             saveMap();
@@ -752,6 +766,78 @@ public class MainFrame extends JFrame {
         }
     }
 
+    public RbmapGridImporter.ImportResult openRbmap(Path rbmapPath,
+                                                    RbmapDocument document,
+                                                    RtpksReader.LoadResult rtpks) throws Exception {
+        String folderPath = rbmapPath.getParent() != null
+                ? rbmapPath.getParent().toString()
+                : "";
+        handler.setLastMapDirectoryUsed(folderPath);
+
+        handler.setTileset(rtpks.tileset);
+        handler.getMapMatrix().tilesetFilePath = rtpks.rtpksPath.toString();
+        handler.setLastTilesetDirectoryUsed(
+                rtpks.rtpksPath.getParent() != null ? rtpks.rtpksPath.getParent().toString() : "");
+        handler.setResortTilesetBinding(new ResortTilesetBinding(
+                rtpks.rtpksPath, rtpks.manifest, rtpks.tileIndex));
+
+        Point mapCoord = new Point(0, 0);
+        if (document.bake != null && document.bake.mapCoordinate != null
+                && document.bake.mapCoordinate.length >= 2) {
+            mapCoord = new Point(document.bake.mapCoordinate[0], document.bake.mapCoordinate[1]);
+        }
+
+        handler.getMapMatrix().getMatrix().clear();
+        MapData mapData = handler.getMapMatrix().getMapAndCreate(mapCoord);
+        RbmapGridImporter.ImportResult importResult =
+                RbmapGridImporter.apply(mapData.getGrid(), document, rtpks.tileset);
+
+        handler.getMapMatrix().filePath = rbmapPath.toString();
+        handler.setMapSelected(mapCoord);
+
+        String titleName = document.displayName != null && !document.displayName.isEmpty()
+                ? document.displayName
+                : document.mapId != null ? document.mapId
+                : Utils.removeExtensionFromPath(rbmapPath.getFileName().toString());
+        setTitle(titleName + " - " + handler.getVersionName());
+
+        handler.resetMapStateHandler();
+        jbUndo.setEnabled(false);
+        jbRedo.setEnabled(false);
+
+        renderTilesetThumbnails();
+        handler.setIndexTileSelected(0);
+        handler.setSmartGridIndexSelected(0);
+
+        handler.getMapMatrix().updateAllLayersGL();
+        handler.getMapMatrix().updateBordersData();
+        handler.updateAllMapThumbnails();
+        mapMatrixDisplay.updateSize();
+        updateMapMatrixDisplay();
+        updateViewMapInfo();
+
+        tileSelector.updateLayout();
+        tileSelector.repaint();
+        mapDisplay.requestUpdate();
+        mapDisplay.setCameraAtSelectedMap();
+        mapDisplay.repaint();
+        tileDisplay.requestUpdate();
+        tileDisplay.repaint();
+
+        smartGridDisplay.updateSize();
+        smartGridDisplay.repaint();
+        thumbnailLayerSelector.drawAllLayerThumbnails();
+        thumbnailLayerSelector.repaint();
+
+        repaintHeightSelector();
+        repaintTileSelector();
+        repaintMapDisplay();
+        updateResortStatus();
+
+        opened_map = true;
+        return importResult;
+    }
+
     private JFileChooser createProjectFileChooser(String purpose) {
         JFileChooser fc = new JFileChooser();
 
@@ -939,14 +1025,10 @@ public class MainFrame extends JFrame {
     }
 
     public void openCollisionsEditor() {
-        mapDisplay.requestScreenshot();
-        mapDisplay.setOrthoView();
-        mapDisplay.setCameraAtSelectedMap();
         boolean gridEnabled = mapDisplay.isGridEnabled();
-        mapDisplay.disableGridView();
-        mapDisplay.display();
+        BufferedImage mapBackground = captureOrthoMapBackgroundForEditor();
         final CollisionsEditorDialog dialog = new CollisionsEditorDialog(this);
-        dialog.init(handler, mapDisplay.getScreenshot());
+        dialog.init(handler, mapBackground);
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
         mapDisplay.setGridEnabled(gridEnabled);
@@ -963,14 +1045,10 @@ public class MainFrame extends JFrame {
             mapDisplay.requestUpdate();
             mapDisplay.repaint();
         }else {
-            mapDisplay.requestScreenshot();
-            mapDisplay.setOrthoView();
-            mapDisplay.setCameraAtSelectedMap();
             boolean useGrid = mapDisplay.isGridEnabled();
-            mapDisplay.disableGridView();
-            mapDisplay.display();
+            BufferedImage mapBackground = captureOrthoMapBackgroundForEditor();
             final BdhcEditorDialog dialog = new BdhcEditorDialog(this);
-            dialog.init(handler, mapDisplay.getScreenshot());
+            dialog.init(handler, mapBackground);
             dialog.setLocationRelativeTo(this);
             dialog.setVisible(true);
             mapDisplay.setGridEnabled(useGrid);
@@ -979,16 +1057,22 @@ public class MainFrame extends JFrame {
         }
     }
 
+    private BufferedImage captureOrthoMapBackgroundForEditor() {
+        mapDisplay.requestScreenshot();
+        mapDisplay.setOrthoView();
+        mapDisplay.setCameraAtSelectedMap();
+        mapDisplay.disableGridView();
+        mapDisplay.updateMapLayersGL();
+        mapDisplay.display();
+        return mapDisplay.getScreenshot();
+    }
+
     public void openBacksoundEditor() {
         if (handler.getGame().gameSelected == Game.HEART_GOLD || handler.getGame().gameSelected == Game.SOUL_SILVER) {
-            mapDisplay.requestScreenshot();
-            mapDisplay.setOrthoView();
-            mapDisplay.setCameraAtSelectedMap();
             boolean useGrid = mapDisplay.isGridEnabled();
-            mapDisplay.disableGridView();
-            mapDisplay.display();
+            BufferedImage mapBackground = captureOrthoMapBackgroundForEditor();
             final BacksoundEditorDialog dialog = new BacksoundEditorDialog(this);
-            dialog.init(handler, mapDisplay.getScreenshot());
+            dialog.init(handler, mapBackground);
             dialog.setLocationRelativeTo(this);
             dialog.setVisible(true);
             mapDisplay.setGridEnabled(useGrid);
@@ -1001,14 +1085,10 @@ public class MainFrame extends JFrame {
 
     public void openBdhcamEditor(){
         if (handler.getGame().gameSelected > Game.PEARL && handler.getGame().gameSelected < Game.BLACK) {
-            mapDisplay.requestScreenshot();
-            mapDisplay.setOrthoView();
-            mapDisplay.setCameraAtSelectedMap();
             boolean useGrid = mapDisplay.isGridEnabled();
-            mapDisplay.disableGridView();
-            mapDisplay.display();
+            BufferedImage mapBackground = captureOrthoMapBackgroundForEditor();
             final BdhcamEditorDialog dialog = new BdhcamEditorDialog(this);
-            dialog.init(handler, mapDisplay.getScreenshot());
+            dialog.init(handler, mapBackground);
             dialog.setLocationRelativeTo(this);
             dialog.setVisible(true);
             mapDisplay.setGridEnabled(useGrid);
@@ -1060,30 +1140,52 @@ public class MainFrame extends JFrame {
             Tileset tileset = TilesetIO.readTilesetFromFile(path);
             handler.getMapMatrix().tilesetFilePath = path;
             handler.setTileset(tileset);
+            if (!path.toLowerCase().endsWith(".rtpks")) {
+                if (resortController != null) {
+                    resortController.onTilesetOpenedFromPlainPdsts();
+                } else {
+                    handler.clearResortTilesetBinding();
+                }
+            }
             System.out.println("Textures loaded from path: " + new File(path).getParent());
 
-            renderTilesetThumbnails();
-
-            handler.setIndexTileSelected(0);
-            handler.setSmartGridIndexSelected(0);
-
-            tileSelector.updateLayout();
-            tileSelector.repaint();
-            smartGridDisplay.updateSize();
-            smartGridDisplay.repaint();
-            mapDisplay.requestUpdate();
-            mapDisplay.repaint();
-            tileDisplay.requestUpdate();
-            tileDisplay.repaint();
-            thumbnailLayerSelector.drawAllLayerThumbnails();
-            thumbnailLayerSelector.repaint();
+            refreshEditorAfterTilesetChange();
         } catch (TextureNotFoundException | IOException ex) {
             JOptionPane.showMessageDialog(this, ex.getMessage(), "Error opening tilset", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    public void refreshEditorAfterTilesetChange() {
+        renderTilesetThumbnails();
+
+        handler.setIndexTileSelected(0);
+        handler.setSmartGridIndexSelected(0);
+
+        tileSelector.updateLayout();
+        tileSelector.repaint();
+        smartGridDisplay.updateSize();
+        smartGridDisplay.repaint();
+        mapDisplay.requestUpdate();
+        mapDisplay.repaint();
+        tileDisplay.requestUpdate();
+        tileDisplay.repaint();
+        thumbnailLayerSelector.drawAllLayerThumbnails();
+        thumbnailLayerSelector.repaint();
 
         repaintHeightSelector();
         repaintTileSelector();
         repaintMapDisplay();
+        updateResortStatus();
+    }
+
+    public java.awt.image.BufferedImage getTilesetThumbnailImage() {
+        return tileSelector.getTilesetImage();
+    }
+
+    public void updateResortStatus() {
+        if (jlResortStatus != null && resortController != null) {
+            jlResortStatus.setText(resortController.getStatusText());
+        }
     }
 
     public void openTilesetWithDialog() {
@@ -1195,6 +1297,30 @@ public class MainFrame extends JFrame {
         }
     }
 
+    private boolean hasPersistableMapPath() {
+        String filePath = handler.getMapMatrix().filePath;
+        return filePath != null
+                && !filePath.isEmpty()
+                && filePath.toLowerCase(Locale.ROOT).endsWith("." + MapMatrix.fileExtension);
+    }
+
+    private File defaultMapSaveFile() {
+        String directory = handler.getLastMapDirectoryUsed();
+        String filePath = handler.getMapMatrix().filePath;
+        String baseName = "untitled";
+        if (filePath != null && !filePath.isEmpty()) {
+            File source = new File(filePath);
+            if (source.getParent() != null) {
+                directory = source.getParent();
+            }
+            baseName = Utils.removeExtensionFromPath(source.getName());
+        }
+        if (directory == null || directory.isEmpty()) {
+            directory = System.getProperty("user.home");
+        }
+        return new File(directory, baseName + "." + MapMatrix.fileExtension);
+    }
+
     private void saveMap() {
         try {
             handler.getMapMatrix().saveGridsToFile(handler.getMapMatrix().filePath);
@@ -1223,16 +1349,20 @@ public class MainFrame extends JFrame {
 
     private void saveMapWithDialog() {
         final JFileChooser fc = createProjectFileChooser("Save Map");
-        if (handler.getLastMapDirectoryUsed() != null) {
+        File defaultFile = defaultMapSaveFile();
+        if (defaultFile.getParentFile() != null) {
+            fc.setCurrentDirectory(defaultFile.getParentFile());
+        } else if (handler.getLastMapDirectoryUsed() != null) {
             fc.setCurrentDirectory(new File(handler.getLastMapDirectoryUsed()));
         }
         fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
         fc.setFileFilter(new DirectoryFriendlyExtensionFilter(
                 "Pokemon DS map (*.pdsmap)",
                 MapMatrix.fileExtension));
+        fc.setSelectedFile(defaultFile);
         fc.setApproveButtonText("Save");
-        fc.setDialogTitle("Save");
-        int returnVal = fc.showOpenDialog(this);
+        fc.setDialogTitle("Save Map");
+        int returnVal = fc.showSaveDialog(this);
         if (returnVal == JFileChooser.APPROVE_OPTION) {
             File selected = fc.getSelectedFile();
             if (selected == null || selected.isDirectory()) {
@@ -1243,7 +1373,7 @@ public class MainFrame extends JFrame {
             }
             handler.setLastMapDirectoryUsed(selected.getParent());
             try {
-                String path = selected.getPath();
+                String path = Utils.addExtensionToPath(selected.getPath(), MapMatrix.fileExtension);
                 handler.getMapMatrix().saveGridsToFile(path);
                 handler.getMapMatrix().filePath = path;
                 setTitle(handler.getMapName() + " - " + handler.getVersionName());
@@ -1286,7 +1416,7 @@ public class MainFrame extends JFrame {
                     Tileset.fileExtension));
             fc.setApproveButtonText("Save");
             fc.setDialogTitle("Save Tileset");
-            int returnVal = fc.showOpenDialog(this);
+            int returnVal = fc.showSaveDialog(this);
             if (returnVal == JFileChooser.APPROVE_OPTION) {
                 File file = fc.getSelectedFile();
                 if (file == null || file.isDirectory()) {
@@ -1535,11 +1665,17 @@ public class MainFrame extends JFrame {
 
     public void saveMapThumbnail() throws IOException {
         mapDisplay.requestScreenshot();
+        mapDisplay.updateMapLayersGL();
         mapDisplay.display();
+
+        BufferedImage screenshot = mapDisplay.getScreenshot();
+        if (screenshot == null) {
+            return;
+        }
 
         String path = new File(handler.getMapMatrix().filePath).getParent();
         File file = new File(path + File.separator + "MapThumbnail.png");
-        ImageIO.write(mapDisplay.getScreenshot(), "png", file);
+        ImageIO.write(screenshot, "png", file);
     }
 
     /*

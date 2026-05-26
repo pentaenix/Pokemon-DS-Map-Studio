@@ -86,6 +86,10 @@ public class CollisionsDisplay3D extends GLJPanel implements GLEventListener, Mo
 
     private Mode mode = Mode.View;
 
+    protected int glViewportX = 0;
+    protected int glViewportY = 0;
+    protected int glViewportSize = 1;
+
     public CollisionsDisplay3D() {
         setPreferredSize(new Dimension(width, height));
         setSize(new Dimension(width, height));
@@ -114,11 +118,7 @@ public class CollisionsDisplay3D extends GLJPanel implements GLEventListener, Mo
     @Override
     public void init(GLAutoDrawable drawable) {
         glu = new GLU();
-
         drawable.getGL().getGL2().glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
-
-        handler.getTileset().loadTexturesGL();
-        handler.getBorderMapsTileset().loadTexturesGL();
     }
 
     @Override
@@ -131,6 +131,10 @@ public class CollisionsDisplay3D extends GLJPanel implements GLEventListener, Mo
         GL2 gl = drawable.getGL().getGL2();
 
         gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        if (handler == null || cHandler == null) {
+            return;
+        }
 
         if (updateRequested) {
 
@@ -176,8 +180,16 @@ public class CollisionsDisplay3D extends GLJPanel implements GLEventListener, Mo
     }
 
     @Override
-    public void reshape(GLAutoDrawable glAutoDrawable, int i, int i1, int i2, int i3) {
-
+    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        GL2 gl = drawable.getGL().getGL2();
+        int size = Math.max(1, Math.min(w, h));
+        glViewportX = Math.max(0, (w - size) / 2);
+        glViewportY = Math.max(0, (h - size) / 2);
+        glViewportSize = size;
+        gl.glViewport(glViewportX, glViewportY, glViewportSize, glViewportSize);
     }
 
     @Override
@@ -355,7 +367,8 @@ public class CollisionsDisplay3D extends GLJPanel implements GLEventListener, Mo
                 gl.glOrtho(-v, v, -v, v, -100.0f, 100.0f);
                 break;
             case View:
-                float aspect = (float) getWidth() / (float) getHeight();
+                float aspect = glViewportSize > 0 ? 1.0f
+                        : (float) getWidth() / (float) Math.max(1, getHeight());
                 if (cameraZ < 40.0f) {
                     glu.gluPerspective(60.0f, aspect, 1.0f, 1000.0f);
                 } else {
@@ -736,7 +749,10 @@ public class CollisionsDisplay3D extends GLJPanel implements GLEventListener, Mo
     public void initHandler(MapEditorHandler handler, CollisionHandlerBW cHandler) {
         this.handler = handler;
         this.cHandler = cHandler;
-
+        if (handler != null) {
+            updateRequested = true;
+            repaint();
+        }
     }
 
     public void setxRayEnabled(boolean xRayEnabled) {

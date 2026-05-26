@@ -71,6 +71,10 @@ public class CTileDisplay3D extends GLJPanel implements GLEventListener, MouseLi
     protected boolean updateRequested = false;
     protected final float minZ = -8.0f, maxZ = 8.0f;
 
+    protected int glViewportX = 0;
+    protected int glViewportY = 0;
+    protected int glViewportSize = 1;
+
     public CTileDisplay3D() {
         setPreferredSize(new Dimension(width, height));
         setSize(new Dimension(width, height));
@@ -139,8 +143,16 @@ public class CTileDisplay3D extends GLJPanel implements GLEventListener, MouseLi
     }
 
     @Override
-    public void reshape(GLAutoDrawable glAutoDrawable, int i, int i1, int i2, int i3) {
-
+    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        GL2 gl = drawable.getGL().getGL2();
+        int size = Math.max(1, Math.min(w, h));
+        glViewportX = Math.max(0, (w - size) / 2);
+        glViewportY = Math.max(0, (h - size) / 2);
+        glViewportSize = size;
+        gl.glViewport(glViewportX, glViewportY, glViewportSize, glViewportSize);
     }
 
     @Override
@@ -239,7 +251,8 @@ public class CTileDisplay3D extends GLJPanel implements GLEventListener, MouseLi
     protected void applyCameraTransform(GL2 gl) {
         gl.glLoadIdentity();
 
-        float aspect = (float) getWidth() / (float) getHeight();
+        float aspect = glViewportSize > 0 ? 1.0f
+                : (float) getWidth() / (float) Math.max(1, getHeight());
         if (cameraZ < 40.0f) {
             glu.gluPerspective(60.0f, aspect, 1.0f, 1000.0f);
         } else {

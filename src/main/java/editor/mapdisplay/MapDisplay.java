@@ -168,7 +168,13 @@ public class MapDisplay extends JPanel
 
     public BufferedImage getScreenshot() {
         if (glDisplay != null) {
-            return glDisplay.getScreenshot();
+            BufferedImage img = glDisplay.getScreenshot();
+            if (img == null) {
+                glDisplay.requestScreenshot();
+                glDisplay.display();
+                img = glDisplay.getScreenshot();
+            }
+            return img;
         }
         if (screenshot == null) {
             requestScreenshot();

@@ -70,6 +70,10 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
     protected boolean transparentEnabled = true;
     protected boolean xRayEnabled = true;
 
+    protected int glViewportX = 0;
+    protected int glViewportY = 0;
+    protected int glViewportSize = 1;
+
     public BdhcDisplay3D() {
         setPreferredSize(new Dimension(width, height));
         setSize(new Dimension(width, height));
@@ -99,11 +103,7 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
         cameraRotY = defaultCamRotY;
         cameraRotZ = defaultCamRotZ;
 
-
         drawable.getGL().getGL2().glClearColor(0.0f, 0.5f, 0.5f, 1.0f);
-
-        handler.getTileset().loadTexturesGL();
-        handler.getBorderMapsTileset().loadTexturesGL();
     }
 
     @Override
@@ -116,6 +116,10 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
         GL2 gl = drawable.getGL().getGL2();
 
         gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        if (handler == null) {
+            return;
+        }
 
         if (updateRequested) {
 
@@ -140,7 +144,7 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
         }
 
 
-        if(bdhcHandler != null) {
+        if(bdhcHandler != null && plateCoords != null) {
             if(transparentEnabled){
                 drawTransparent(gl);
             }else{
@@ -154,8 +158,16 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
     }
 
     @Override
-    public void reshape(GLAutoDrawable glAutoDrawable, int i, int i1, int i2, int i3) {
-
+    public void reshape(GLAutoDrawable drawable, int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        GL2 gl = drawable.getGL().getGL2();
+        int size = Math.max(1, Math.min(w, h));
+        glViewportX = Math.max(0, (w - size) / 2);
+        glViewportY = Math.max(0, (h - size) / 2);
+        glViewportSize = size;
+        gl.glViewport(glViewportX, glViewportY, glViewportSize, glViewportSize);
     }
 
     @Override
@@ -247,7 +259,7 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
     protected void applyCameraTransform(GL2 gl) {
         gl.glLoadIdentity();
 
-        float aspect = (float) getWidth() / (float) getHeight();
+        float aspect = (float) glViewportSize / (float) glViewportSize;
         if (cameraZ < 40.0f) {
             glu.gluPerspective(60.0f, aspect, 1.0f, 1000.0f);
         } else {
@@ -272,6 +284,12 @@ public class BdhcDisplay3D extends GLJPanel implements GLEventListener, MouseLis
     public void setHandler(MapEditorHandler handler, BdhcHandler bdhcHandler) {
         this.handler = handler;
         this.bdhcHandler = bdhcHandler;
+        if (handler != null) {
+            handler.getTileset().loadTexturesGL();
+            handler.getBorderMapsTileset().loadTexturesGL();
+            updateRequested = true;
+            repaint();
+        }
     }
 
     public void drawPlates(GL2 gl){

@@ -175,7 +175,7 @@ public class BdhcDisplay extends JPanel {
             g.setColor(Color.green);
             g.drawLine(width / 2, height / 2, width / 2, height);
             g.setColor(Color.blue);
-            g.drawLine(width / 2, height / 2, width / 2, width / 2);
+            g.drawLine(width / 2, height / 2, width / 2, height / 2);
 
             g.translate(width / 2, height / 2);
             drawPlates(g, bdhc);

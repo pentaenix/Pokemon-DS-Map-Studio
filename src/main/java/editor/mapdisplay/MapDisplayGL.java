@@ -201,6 +201,9 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
      */
     protected int glDrawableViewportWidth = 1;
     protected int glDrawableViewportHeight = 1;
+    /** Drawable-pixel origin of the GL viewport (bottom-left Y in OpenGL coordinates). */
+    protected int glViewportX = 0;
+    protected int glViewportY = 0;
 
     /** Scratch [x,y,w,h] in logical component pixels for mouse mapping (same space as {@link MouseEvent#getX()}. */
     private final int[] inputViewportScratch = new int[4];
@@ -410,6 +413,8 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
             int glVyTop = Math.max(0, (height - glSize) / 2);
             int glOglY = height - glVyTop - glSize;
             gl.glViewport(glVx, glOglY, glSize, glSize);
+            glViewportX = glVx;
+            glViewportY = glOglY;
             glDrawableViewportWidth = glSize;
             glDrawableViewportHeight = glSize;
             if (VIEWPORT_LOG_COUNT.getAndIncrement() < 5) {
@@ -418,6 +423,8 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
             }
         } else {
             gl.glViewport(0, 0, width, height);
+            glViewportX = 0;
+            glViewportY = 0;
             glDrawableViewportWidth = width;
             glDrawableViewportHeight = height;
             if (VIEWPORT_LOG_COUNT.getAndIncrement() < 5) {
@@ -1828,19 +1835,34 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
     }
 
     protected void drawScreenshot(GL2 gl) {
+        final float scale;
+        final int readX;
+        final int readY;
+        final int mapWidth;
+        final int mapHeight;
 
-        float xScale = (float) getWidth() / width;
-        float yScale = (float) getHeight() / height;
-        final int mapWidth = (int) (cols * tileSize * xScale);
-        final int mapHeight = (int) (rows * tileSize * yScale);
+        if (shouldUseSquareViewport()) {
+            scale = (float) glDrawableViewportWidth / (float) width;
+            mapWidth = Math.max(1, Math.round(cols * tileSize * scale));
+            mapHeight = Math.max(1, Math.round(rows * tileSize * scale));
+            readX = glViewportX + Math.round(borderSize * tileSize * scale);
+            readY = glViewportY + Math.round(borderSize * tileSize * scale);
+        } else {
+            scale = (float) getWidth() / width;
+            float yScale = (float) getHeight() / height;
+            mapWidth = Math.max(1, Math.round(cols * tileSize * scale));
+            mapHeight = Math.max(1, Math.round(rows * tileSize * yScale));
+            readX = Math.round(borderSize * tileSize * scale);
+            readY = Math.round(borderSize * tileSize * yScale);
+        }
+
         BufferedImage upscaledImage = new BufferedImage(mapWidth, mapHeight, BufferedImage.TYPE_INT_RGB);
         Graphics graphics = upscaledImage.getGraphics();
 
         ByteBuffer buffer = GLBuffers.newDirectByteBuffer(mapWidth * mapHeight * 4);
 
         gl.glReadBuffer(GL_BACK);
-        gl.glReadPixels((int) (borderSize * tileSize * xScale), (int) (borderSize * tileSize * yScale),
-                mapWidth, mapHeight, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+        gl.glReadPixels(readX, readY, mapWidth, mapHeight, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 
         for (int h = 0; h < mapHeight; h++) {
             for (int w = 0; w < mapWidth; w++) {

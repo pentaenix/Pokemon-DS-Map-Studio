@@ -28,6 +28,7 @@ import java.util.TreeSet;
 import tileset.Tile;
 import tileset.Tileset;
 import utils.Utils;
+import resort.integration.ResortTilesetBinding;
 
 /**
  * @author Trifindo
@@ -54,6 +55,7 @@ public class MapEditorHandler {
 
     //Tileset
     private Tileset tset;
+    private ResortTilesetBinding resortTilesetBinding;
 
     //Tile selector
     private int indexTileSelected = 0;
@@ -209,6 +211,22 @@ public class MapEditorHandler {
 
     public Tileset getTileset() {
         return tset;
+    }
+
+    public void setResortTilesetBinding(ResortTilesetBinding binding) {
+        this.resortTilesetBinding = binding;
+    }
+
+    public ResortTilesetBinding getResortTilesetBinding() {
+        return resortTilesetBinding;
+    }
+
+    public boolean hasResortTilesetBinding() {
+        return resortTilesetBinding != null;
+    }
+
+    public void clearResortTilesetBinding() {
+        this.resortTilesetBinding = null;
     }
 
     public MapGrid getGrid() {
