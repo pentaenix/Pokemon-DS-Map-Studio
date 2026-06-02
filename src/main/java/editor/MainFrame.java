@@ -291,6 +291,22 @@ public class MainFrame extends JFrame {
         saveMapWithDialog();
     }
 
+    private void jmiSaveRbmapActionPerformed(ActionEvent e) {
+        if (resortController != null) {
+            resortController.saveAsRbmap();
+        }
+    }
+
+    public void setTitleFromHandler() {
+        String mapPath = handler.getMapMatrix().filePath;
+        if (mapPath != null && mapPath.toLowerCase(java.util.Locale.ROOT).endsWith(".rbmap")) {
+            String name = Utils.removeExtensionFromPath(new java.io.File(mapPath).getName());
+            setTitle(name + " - " + handler.getVersionName());
+        } else if (!handler.getMapMatrix().filePath.isEmpty()) {
+            setTitle(handler.getMapName() + " - " + handler.getVersionName());
+        }
+    }
+
     private void jmiAddMapsActionPerformed(ActionEvent e) {
         addMapWithDialog();
     }
@@ -719,7 +735,7 @@ public class MainFrame extends JFrame {
                 handler.setTileset(tileset);
                 System.out.println("Textures loaded from path: " + new File(path).getParent());
 
-                renderTilesetThumbnails();
+                ensureTilesetThumbnails();
 
                 handler.setIndexTileSelected(0);
                 handler.setSmartGridIndexSelected(0);
@@ -781,6 +797,13 @@ public class MainFrame extends JFrame {
         handler.setResortTilesetBinding(new ResortTilesetBinding(
                 rtpks.rtpksPath, rtpks.manifest, rtpks.tileIndex));
 
+        if (document.editorConfig != null) {
+            handler.setResortMapMetadata(document.editorConfig);
+        }
+
+        // Thumbnails must exist before setMapSelected / updateAllMapThumbnails (they draw layer previews).
+        ensureTilesetThumbnails();
+
         Point mapCoord = new Point(0, 0);
         if (document.bake != null && document.bake.mapCoordinate != null
                 && document.bake.mapCoordinate.length >= 2) {
@@ -793,7 +816,6 @@ public class MainFrame extends JFrame {
                 RbmapGridImporter.apply(mapData.getGrid(), document, rtpks.tileset);
 
         handler.getMapMatrix().filePath = rbmapPath.toString();
-        handler.setMapSelected(mapCoord);
 
         String titleName = document.displayName != null && !document.displayName.isEmpty()
                 ? document.displayName
@@ -804,13 +826,12 @@ public class MainFrame extends JFrame {
         handler.resetMapStateHandler();
         jbUndo.setEnabled(false);
         jbRedo.setEnabled(false);
-
-        renderTilesetThumbnails();
         handler.setIndexTileSelected(0);
         handler.setSmartGridIndexSelected(0);
 
         handler.getMapMatrix().updateAllLayersGL();
         handler.getMapMatrix().updateBordersData();
+        handler.setMapSelected(mapCoord);
         handler.updateAllMapThumbnails();
         mapMatrixDisplay.updateSize();
         updateMapMatrixDisplay();
@@ -1156,7 +1177,7 @@ public class MainFrame extends JFrame {
     }
 
     public void refreshEditorAfterTilesetChange() {
-        renderTilesetThumbnails();
+        ensureTilesetThumbnails();
 
         handler.setIndexTileSelected(0);
         handler.setSmartGridIndexSelected(0);
@@ -2346,7 +2367,31 @@ public class MainFrame extends JFrame {
             StartupTrace.log("MainFrame.renderTilesetThumbnails: skipping TilesetRenderer runtime");
             return;
         }
-        StartupTrace.log("MainFrame.renderTilesetThumbnails: TilesetRenderer runtime enabled");
+        generateTilesetThumbnailsWithRenderer();
+    }
+
+    /** Always generates GL thumbnails when missing (e.g. after Open RBMAP / RTPKS). */
+    public void ensureTilesetThumbnails() {
+        if (handler.getTileset() == null || handler.getTileset().size() == 0) {
+            return;
+        }
+        if (!tilesetNeedsThumbnails(handler.getTileset())) {
+            return;
+        }
+        StartupTrace.log("MainFrame.ensureTilesetThumbnails: generating missing thumbnails");
+        generateTilesetThumbnailsWithRenderer();
+    }
+
+    private static boolean tilesetNeedsThumbnails(Tileset tileset) {
+        for (int i = 0; i < tileset.size(); i++) {
+            if (tileset.get(i).getSmallThumbnail() == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void generateTilesetThumbnailsWithRenderer() {
         GLContext context = mapDisplay.getContext();
         TilesetRenderer tr = new TilesetRenderer(handler.getTileset());
         try {
@@ -2529,6 +2574,9 @@ public class MainFrame extends JFrame {
         traceInit("before new JMenuItem (jmiSaveMapAs)");
         jmiSaveMapAs = new JMenuItem();
         traceInit("after new JMenuItem (jmiSaveMapAs)");
+        traceInit("before new JMenuItem (jmiSaveRbmap)");
+        jmiSaveRbmap = new JMenuItem();
+        traceInit("after new JMenuItem (jmiSaveRbmap)");
         traceInit("before new JMenuItem (jmiAddMaps)");
         jmiAddMaps = new JMenuItem();
         traceInit("after new JMenuItem (jmiAddMaps)");
@@ -3017,6 +3065,11 @@ public class MainFrame extends JFrame {
                 jmiSaveMapAs.setMnemonic('A');
                 jmiSaveMapAs.addActionListener(e -> jmiSaveMapAsActionPerformed(e));
                 jmFile.add(jmiSaveMapAs);
+
+                //---- jmiSaveRbmap ----
+                jmiSaveRbmap.setText("Save as RBMAP (bake)...");
+                jmiSaveRbmap.addActionListener(e -> jmiSaveRbmapActionPerformed(e));
+                jmFile.add(jmiSaveRbmap);
                 jmFile.addSeparator();
 
                 //---- jmiAddMaps ----
@@ -4360,6 +4413,7 @@ public class MainFrame extends JFrame {
     private JMenuItem jmiClearHistory;
     private JMenuItem jmiSaveMap;
     private JMenuItem jmiSaveMapAs;
+    private JMenuItem jmiSaveRbmap;
     private JMenuItem jmiAddMaps;
     private JMenuItem jmiExportObjWithText;
     private JMenuItem jmiExportMapAsImd;

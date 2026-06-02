@@ -85,13 +85,14 @@ public class MapData {
                     }
 
                     int tileIndex = tiles[maxHeightIndex][i][j];
-                    if (tileIndex != -1) {
+                    if (tileIndex != -1 && tileIndex < handler.getTileset().size()) {
                         BufferedImage tileThumbnail = handler.getTileset().get(tileIndex).getSmallThumbnail();
-
-                        g.drawImage(tileThumbnail,
-                                i * smallTileSize,
-                                (MapGrid.cols - j - 1) * smallTileSize - (tileThumbnail.getHeight() - smallTileSize), //+ tileThumbnail.getHeight(),
-                                null);
+                        if (tileThumbnail != null) {
+                            g.drawImage(tileThumbnail,
+                                    i * smallTileSize,
+                                    (MapGrid.cols - j - 1) * smallTileSize - (tileThumbnail.getHeight() - smallTileSize),
+                                    null);
+                        }
                     }
                 } catch (Exception ex) {
                     ex.printStackTrace();

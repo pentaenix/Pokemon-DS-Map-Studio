@@ -20,6 +20,8 @@ public class RbmapDocument {
     public BakeInfo bake = new BakeInfo();
     public List<RuntimeChunk> chunks = new ArrayList<>();
     public CollisionPlaceholder collision = new CollisionPlaceholder();
+    /** Full editor bake/config; round-trips with Save as RBMAP (no .resort.json sidecar required). */
+    public ResortMapMetadata editorConfig;
 
     public static class BakeInfo {
         public int[] mapCoordinate = new int[]{0, 0};

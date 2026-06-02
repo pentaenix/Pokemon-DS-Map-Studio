@@ -26,16 +26,24 @@ public class ResortBaker {
     }
 
     public ResortBakeReport bakeSelectedMap(ResortMapMetadata metadata) throws Exception {
+        Path runtimeRoot = resolveRuntimeRoot(metadata, handler);
+        Path rpakOutput = runtimeRoot.resolve(metadata.bake.output.assetPack).normalize();
+        Path rbmapOutput = runtimeRoot.resolve(metadata.bake.output.mapName).normalize();
+        return bakeToPaths(metadata, rbmapOutput, rpakOutput);
+    }
+
+    public ResortBakeReport bakeToPaths(ResortMapMetadata metadata, Path rbmapOutput, Path rpakOutput) throws Exception {
         ResortTilesetBinding binding = handler.getResortTilesetBinding();
         if (binding == null) {
             throw new IllegalStateException("Current tileset is not loaded from RTPKS.");
         }
 
-        Path runtimeRoot = resolveRuntimeRoot(metadata, handler);
-        Path rpakOutput = runtimeRoot.resolve(metadata.bake.output.assetPack).normalize();
-        Path rbmapOutput = runtimeRoot.resolve(metadata.bake.output.mapName).normalize();
-        Files.createDirectories(rpakOutput.getParent());
         Files.createDirectories(rbmapOutput.getParent());
+        Files.createDirectories(rpakOutput.getParent());
+
+        Path runtimeRoot = rbmapOutput.getParent() != null
+                ? rbmapOutput.getParent()
+                : Paths.get(".").toAbsolutePath().normalize();
 
         ResortBakeContext context = new ResortBakeContext(
                 handler, binding, metadata, runtimeRoot, rpakOutput, rbmapOutput);
@@ -75,6 +83,10 @@ public class ResortBaker {
         rbmapDocument.bake.chunkSizeTiles = context.chunkSizeTiles;
         rbmapDocument.bake.heightScale = context.heightScale;
         rbmapDocument.chunks = chunkResult.chunks;
+        rbmapDocument.editorConfig = metadata;
+        rbmapDocument.rpakDependency = rpakOutput.getFileName() != null
+                ? rpakOutput.getFileName().toString()
+                : metadata.bake.output.assetPack;
         RbmapWriter.write(rbmapOutput, rbmapDocument);
 
         ResortBakeReport report = new ResortBakeReport();

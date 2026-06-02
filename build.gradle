@@ -111,6 +111,7 @@ tasks.register('packageMacApp') {
                     '--app-version', project.version.toString(),
                     '--vendor', 'Pokemon DS Map Studio',
                     '--java-options', '-Djava.awt.headless=false',
+                    '--java-options', '-Djava.awt.headless=false',
                     '--java-options', '-Dsun.java2d.metal=false',
                     '--java-options', '-Dapple.awt.UIElement=false',
                     '--java-options', '-Dapple.laf.useScreenMenuBar=false',

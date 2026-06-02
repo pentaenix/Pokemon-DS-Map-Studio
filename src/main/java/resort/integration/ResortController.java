@@ -2,8 +2,6 @@ package resort.integration;
 
 import editor.MainFrame;
 import editor.handler.MapEditorHandler;
-import resort.bake.ResortBakeReport;
-import resort.bake.ResortBaker;
 import resort.formats.ResortMapMetadata;
 import resort.formats.ResortMapMetadataIO;
 import javax.swing.JMenu;
@@ -20,7 +18,7 @@ public class ResortController {
     private final ResortTilesetWorkflow tilesetWorkflow;
     private final ResortMapWorkflow mapWorkflow;
     private final ConfigureResortMetadataDialog metadataDialog;
-    private final ResortBaker baker;
+    private final SaveRbmapDialog saveRbmapDialog;
 
     public ResortController(MainFrame mainFrame, MapEditorHandler handler) {
         this.mainFrame = mainFrame;
@@ -28,7 +26,7 @@ public class ResortController {
         this.tilesetWorkflow = new ResortTilesetWorkflow(mainFrame, handler);
         this.mapWorkflow = new ResortMapWorkflow(mainFrame, handler);
         this.metadataDialog = new ConfigureResortMetadataDialog(handler);
-        this.baker = new ResortBaker(handler);
+        this.saveRbmapDialog = new SaveRbmapDialog(handler);
     }
 
     public void installMenu(JMenuBar menuBar) {
@@ -41,7 +39,16 @@ public class ResortController {
         JMenuItem saveRtpks = new JMenuItem("Save Current Tileset as RTPKS...");
         saveRtpks.addActionListener(e -> tilesetWorkflow.saveTilesetAsRtpksWithDialog());
         resortMenu.add(saveRtpks);
+
+        JMenuItem appendRtpks = new JMenuItem("Append Current Tiles to RTPKS...");
+        appendRtpks.setToolTipText("Merge the editor tileset onto an existing RTPKS pack.");
+        appendRtpks.addActionListener(e -> tilesetWorkflow.appendCurrentTilesToRtpksWithDialog());
+        resortMenu.add(appendRtpks);
         resortMenu.addSeparator();
+
+        JMenuItem saveRbmap = new JMenuItem("Save as RBMAP (bake + config)...");
+        saveRbmap.addActionListener(e -> saveAsRbmap());
+        resortMenu.add(saveRbmap);
 
         JMenuItem configureMetadata = new JMenuItem("Configure Resort Map Metadata...");
         configureMetadata.addActionListener(e -> metadataDialog.showDialog(mainFrame));
@@ -53,7 +60,8 @@ public class ResortController {
         resortMenu.add(validate);
 
         JMenuItem bakeSelected = new JMenuItem("Bake Selected Map to RBMAP...");
-        bakeSelected.addActionListener(e -> bakeSelectedMap());
+        bakeSelected.setToolTipText("Opens Save as RBMAP (same one-step bake + export).");
+        bakeSelected.addActionListener(e -> saveAsRbmap());
         resortMenu.add(bakeSelected);
 
         JMenuItem openRbmap = new JMenuItem("Open RBMAP as Map...");
@@ -72,9 +80,16 @@ public class ResortController {
         menuBar.add(resortMenu);
     }
 
+    public void saveAsRbmap() {
+        if (saveRbmapDialog.showDialog(mainFrame)) {
+            mainFrame.setTitleFromHandler();
+            mainFrame.updateResortStatus();
+        }
+    }
+
     public void validateSetup() {
-        ResortMapMetadata metadata = loadSidecarOrWarn(mainFrame);
-        if (metadata == null && handler.getMapMatrix().filePath.isEmpty()) {
+        ResortMapMetadata metadata = resolveMetadata(mainFrame, false);
+        if (metadata == null) {
             return;
         }
         ResortSetupValidator.ValidationReport report =
@@ -86,63 +101,42 @@ public class ResortController {
     }
 
     public void bakeSelectedMap() {
-        ResortMapMetadata metadata = loadSidecarOrWarn(mainFrame);
-        if (metadata == null) {
-            return;
+        saveAsRbmap();
+    }
+
+    /** Metadata: in-memory → sidecar → defaults (no PDMS save required). */
+    ResortMapMetadata resolveMetadata(Component parent, boolean warnOnEmptyBinding) {
+        if (handler.getResortMapMetadata() != null) {
+            return handler.getResortMapMetadata();
         }
 
-        ResortSetupValidator.ValidationReport validation =
-                ResortSetupValidator.validate(handler, metadata);
-        if (!validation.valid) {
-            int proceed = JOptionPane.showConfirmDialog(mainFrame,
-                    validation.toDisplayText() + "\n\nBake anyway?",
-                    "Validation Failed",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.WARNING_MESSAGE);
-            if (proceed != JOptionPane.YES_OPTION) {
-                return;
+        Path sidecarPath = ResortSetupValidator.resolveSidecarForHandler(handler);
+        if (sidecarPath != null) {
+            try {
+                ResortMapMetadata metadata = ResortMapMetadataIO.read(sidecarPath);
+                if (metadata != null) {
+                    handler.setResortMapMetadata(metadata);
+                    return metadata;
+                }
+            } catch (Exception ex) {
+                if (parent != null) {
+                    JOptionPane.showMessageDialog(parent, ex.getMessage(), "Pokémon Resort", JOptionPane.ERROR_MESSAGE);
+                }
+                return null;
             }
         }
 
-        try {
-            ResortBakeReport report = baker.bakeSelectedMap(metadata);
-            JOptionPane.showMessageDialog(mainFrame,
-                    report.toDisplayText(),
-                    "Bake Complete",
-                    report.errors.isEmpty()
-                            ? JOptionPane.INFORMATION_MESSAGE
-                            : JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(mainFrame,
-                    ex.getMessage(),
-                    "Bake Failed",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private ResortMapMetadata loadSidecarOrWarn(Component parent) {
-        Path sidecarPath = ResortSetupValidator.resolveSidecarForHandler(handler);
-        if (sidecarPath == null) {
+        if (warnOnEmptyBinding && handler.getResortTilesetBinding() == null) {
             JOptionPane.showMessageDialog(parent,
-                    "Save the map/project first, then configure Resort metadata.",
+                    "Open a tileset from RTPKS first.",
                     "Pokémon Resort",
                     JOptionPane.WARNING_MESSAGE);
             return null;
         }
-        try {
-            ResortMapMetadata metadata = ResortMapMetadataIO.read(sidecarPath);
-            if (metadata == null) {
-                JOptionPane.showMessageDialog(parent,
-                        "Missing sidecar:\n" + sidecarPath
-                                + "\nUse Configure Resort Map Metadata first.",
-                        "Pokémon Resort",
-                        JOptionPane.WARNING_MESSAGE);
-            }
-            return metadata;
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(parent, ex.getMessage(), "Pokémon Resort", JOptionPane.ERROR_MESSAGE);
-            return null;
-        }
+
+        ResortMapMetadata defaults = ResortMetadataDefaults.fromMapFilePath(handler);
+        handler.setResortMapMetadata(defaults);
+        return defaults;
     }
 
     public void onTilesetOpenedFromPlainPdsts() {

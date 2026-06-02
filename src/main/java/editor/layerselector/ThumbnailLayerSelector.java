@@ -248,13 +248,12 @@ public class ThumbnailLayerSelector extends JPanel {
         for (int i = 0; i < MapGrid.cols; i++) {
             for (int j = 0; j < MapGrid.rows; j++) {
                 int tileIndex = grid[i][j];
-                if (tileIndex != -1) {
-                    if (tileIndex < handler.getTileset().size()) {
-                        BufferedImage tileThumbnail = handler.getTileset().get(tileIndex).getSmallThumbnail();
-
+                if (tileIndex != -1 && tileIndex < handler.getTileset().size()) {
+                    BufferedImage tileThumbnail = handler.getTileset().get(tileIndex).getSmallThumbnail();
+                    if (tileThumbnail != null) {
                         g.drawImage(tileThumbnail,
                                 i * smallTileSize,
-                                (MapGrid.cols - j - 1) * smallTileSize - (tileThumbnail.getHeight() - smallTileSize), //+ tileThumbnail.getHeight(),
+                                (MapGrid.cols - j - 1) * smallTileSize - (tileThumbnail.getHeight() - smallTileSize),
                                 null);
                     }
                 }

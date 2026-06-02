@@ -28,6 +28,7 @@ import java.util.TreeSet;
 import tileset.Tile;
 import tileset.Tileset;
 import utils.Utils;
+import resort.formats.ResortMapMetadata;
 import resort.integration.ResortTilesetBinding;
 
 /**
@@ -56,6 +57,7 @@ public class MapEditorHandler {
     //Tileset
     private Tileset tset;
     private ResortTilesetBinding resortTilesetBinding;
+    private ResortMapMetadata resortMapMetadata;
 
     //Tile selector
     private int indexTileSelected = 0;
@@ -227,6 +229,14 @@ public class MapEditorHandler {
 
     public void clearResortTilesetBinding() {
         this.resortTilesetBinding = null;
+    }
+
+    public ResortMapMetadata getResortMapMetadata() {
+        return resortMapMetadata;
+    }
+
+    public void setResortMapMetadata(ResortMapMetadata resortMapMetadata) {
+        this.resortMapMetadata = resortMapMetadata;
     }
 
     public MapGrid getGrid() {

@@ -26,8 +26,8 @@ import javax.swing.JPanel;
 import utils.StartupTrace;
 
 /**
- * Swing map preview with optional embedded {@link MapDisplayGL} when
- * {@code -Dpdsm.enableJoglMap=true} or legacy {@code -Dpdsm.enableJogl=true}.
+ * Swing map preview with optional embedded {@link MapDisplayGL} ({@link com.jogamp.opengl.awt.GLJPanel})
+ * when {@code -Dpdsm.enableJoglMap=true} or legacy {@code -Dpdsm.enableJogl=true}.
  */
 public class MapDisplay extends JPanel
         implements MouseListener, MouseMotionListener, KeyListener, MouseWheelListener {

@@ -45,7 +45,7 @@ import com.jogamp.opengl.GLContext;
 import com.jogamp.opengl.GLEventListener;
 import com.jogamp.opengl.GLException;
 import com.jogamp.opengl.GLProfile;
-import com.jogamp.opengl.awt.GLCanvas;
+import com.jogamp.opengl.awt.GLJPanel;
 import com.jogamp.opengl.glu.GLU;
 import com.jogamp.opengl.util.GLBuffers;
 import com.jogamp.opengl.util.texture.Texture;
@@ -101,7 +101,7 @@ import utils.Utils;
 /**
  * @author Trifindo
  */
-public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseListener, MouseMotionListener, KeyListener, MouseWheelListener {
+public class MapDisplayGL extends GLJPanel implements GLEventListener, MouseListener, MouseMotionListener, KeyListener, MouseWheelListener {
 
     static {
         StartupTrace.log("MapDisplayGL: static init thread=" + Thread.currentThread().getName());
@@ -317,13 +317,15 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
 
             //gl.glEnable(GL2.GL_LIGHTING);
 
+            boolean drawTileGeometry = viewMode.getViewID() != ViewMode.ViewID.VIEW_HEIGHT;
+
             //Draw opaque tiles
-            if (handler.getTileset().size() > 0) {
+            if (drawTileGeometry && handler.getTileset().size() > 0) {
                 drawOpaqueMaps(gl, filteredMaps);
             }
 
             //Draw semitransparent tiles
-            if (handler.getTileset().size() > 0) {
+            if (drawTileGeometry && handler.getTileset().size() > 0) {
                 drawTransparentMaps(gl, filteredMaps);
             }
 
@@ -381,8 +383,23 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
     }
 
     /**
-     * Letterbox in <strong>logical</strong> component pixels (matches {@link MouseEvent} coordinates).
-     * {@link #reshape}'s width/height are often backing-store pixels on HiDPI; do not use those for mouse.
+     * Screen rect (logical pixels) where the square map is drawn, centered with uniform scale.
+     * {@code out} = {@code [x, y, width, height]}.
+     */
+    private void computeMapScreenRect(int[] out) {
+        int cw = Math.max(1, getWidth());
+        int ch = Math.max(1, getHeight());
+        float scale = Math.min((float) cw / width, (float) ch / height);
+        int sw = Math.max(1, Math.round(width * scale));
+        int sh = Math.max(1, Math.round(height * scale));
+        out[0] = Math.max(0, (cw - sw) / 2);
+        out[1] = Math.max(0, (ch - sh) / 2);
+        out[2] = sw;
+        out[3] = sh;
+    }
+
+    /**
+     * Region used for mouse normalization and Java2D overlays (logical component pixels).
      */
     private void fillInputViewportForMouse(int[] out) {
         int cw = Math.max(1, getWidth());
@@ -394,11 +411,7 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
             out[3] = ch;
             return;
         }
-        int s = Math.max(1, Math.min(cw, ch));
-        out[0] = Math.max(0, (cw - s) / 2);
-        out[1] = Math.max(0, (ch - s) / 2);
-        out[2] = s;
-        out[3] = s;
+        computeMapScreenRect(out);
     }
 
     @Override
@@ -407,29 +420,14 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
         if (width <= 0 || height <= 0) {
             return;
         }
-        if (shouldUseSquareViewport()) {
-            int glSize = Math.max(1, Math.min(width, height));
-            int glVx = Math.max(0, (width - glSize) / 2);
-            int glVyTop = Math.max(0, (height - glSize) / 2);
-            int glOglY = height - glVyTop - glSize;
-            gl.glViewport(glVx, glOglY, glSize, glSize);
-            glViewportX = glVx;
-            glViewportY = glOglY;
-            glDrawableViewportWidth = glSize;
-            glDrawableViewportHeight = glSize;
-            if (VIEWPORT_LOG_COUNT.getAndIncrement() < 5) {
-                StartupTrace.log("MapDisplayGL.viewport: drawable " + glVx + "," + glOglY + " "
-                        + glSize + "x" + glSize + " logical " + getWidth() + "x" + getHeight());
-            }
-        } else {
-            gl.glViewport(0, 0, width, height);
-            glViewportX = 0;
-            glViewportY = 0;
-            glDrawableViewportWidth = width;
-            glDrawableViewportHeight = height;
-            if (VIEWPORT_LOG_COUNT.getAndIncrement() < 5) {
-                StartupTrace.log("MapDisplayGL.viewport: 0,0 " + width + "x" + height + " (3D full)");
-            }
+        gl.glViewport(0, 0, width, height);
+        glViewportX = 0;
+        glViewportY = 0;
+        glDrawableViewportWidth = width;
+        glDrawableViewportHeight = height;
+        if (VIEWPORT_LOG_COUNT.getAndIncrement() < 5) {
+            StartupTrace.log("MapDisplayGL.viewport: 0,0 " + width + "x" + height
+                    + " logical " + getWidth() + "x" + getHeight());
         }
         fillInputViewportForMouse(inputViewportScratch);
         StartupTrace.log("MapDisplayGL.reshape: drawable=" + width + "x" + height
@@ -707,47 +705,42 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
     }
 
     @Override
-    public void paint(Graphics g) {
-        super.paint(g);
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
 
         if (handler != null) {
             viewMode.paintComponent(this, g);
 
-            if (backImageEnabled) {
+            if (backImageEnabled && backImage != null
+                    && viewMode.getViewID() == ViewMode.ViewID.VIEW_3D) {
                 drawBackImage(g);
             }
         }
-
     }
 
     protected void applyGraphicsTransform(Graphics2D g2d) {
         g2d.setRenderingHints(new RenderingHints(
                 RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR));
-        /*
-                g2d.setRenderingHints(new RenderingHints(
-                        RenderingHints.KEY_INTERPOLATION,
-                        RenderingHints.VALUE_INTERPOLATION_BILINEAR));*/
 
+        fillInputViewportForMouse(inputViewportScratch);
+        int vpX = inputViewportScratch[0];
+        int vpY = inputViewportScratch[1];
+        int vpW = Math.max(1, inputViewportScratch[2]);
+        int vpH = Math.max(1, inputViewportScratch[3]);
 
-        float xScaleWindows = (float) getWidth() / width;
-        float yScaleWindows = (float) getHeight() / height;
-        g2d.scale(xScaleWindows, yScaleWindows);
+        g2d.translate(vpX, vpY);
 
-        //TODO: Use this code for keeping the aspect ratio
-        //g2d.scale(yScaleWindows, yScaleWindows);
-        //float aspect = getAspectRatio();
-        //g2d.translate((aspect - 1.0f) * width / 2, 1.0f);
-
+        float uniformScale = (float) vpW / width;
+        g2d.scale(uniformScale, uniformScale);
 
         float xScaleFactor = orthoScale;
         float yScaleFactor = orthoScale;
 
-        float xTranslation = (getWidth() * (1.0f - xScaleFactor) / 2f);
-        float yTranslation = (getHeight() * (1.0f - yScaleFactor) / 2f);
+        float xTranslation = width * (1.0f - xScaleFactor) / 2f;
+        float yTranslation = height * (1.0f - yScaleFactor) / 2f;
 
-        g2d.translate(xTranslation / xScaleWindows, yTranslation / yScaleWindows);
-        //g2d.translate(xTranslation / yScaleWindows, yTranslation / yScaleWindows);
+        g2d.translate(xTranslation, yTranslation);
         g2d.scale(xScaleFactor, yScaleFactor);
 
         g2d.translate(-cameraX * tileSize, cameraY * tileSize);
@@ -788,7 +781,10 @@ public class MapDisplayGL extends GLCanvas implements GLEventListener, MouseList
             for (int j = 0; j < rows; j++) {
                 int x = (i + borderSize) * tileSize + xOffset;
                 int y = (rows - 1 - j + borderSize) * tileSize + yOffset;
-                g.drawImage(handler.getHeightImageByValue(heightGrid[i][j]), x, y, null);
+                BufferedImage heightImg = handler.getHeightImageByValue(heightGrid[i][j]);
+                if (heightImg != null) {
+                    g.drawImage(heightImg, x, y, null);
+                }
             }
         }
     }

@@ -2,6 +2,7 @@ package resort.integration;
 
 import editor.MainFrame;
 import editor.handler.MapEditorHandler;
+import resort.formats.RtpksAppender;
 import resort.formats.RtpksReader;
 import resort.formats.RtpksWriter;
 import resort.formats.TileIndex;
@@ -89,6 +90,89 @@ public class ResortTilesetWorkflow {
             path = path.resolveSibling(path.getFileName() + ".rtpks");
         }
         saveTilesetAsRtpks(path);
+    }
+
+    public void appendCurrentTilesToRtpksWithDialog() {
+        if (handler.getTileset() == null || handler.getTileset().size() == 0) {
+            JOptionPane.showMessageDialog(mainFrame,
+                    "Load a tileset with tiles to append before using this action.",
+                    "Append to RTPKS",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        JFileChooser chooser = new JFileChooser();
+        if (handler.getLastTilesetDirectoryUsed() != null) {
+            chooser.setCurrentDirectory(new File(handler.getLastTilesetDirectoryUsed()));
+        }
+        chooser.setFileFilter(new FileNameExtensionFilter("Resort Tile Pack Source (*.rtpks)", "rtpks"));
+        chooser.setDialogTitle("Append Current Tiles to RTPKS");
+        chooser.setApproveButtonText("Append");
+
+        if (chooser.showOpenDialog(mainFrame) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        Path path = chooser.getSelectedFile().toPath();
+        if (!path.getFileName().toString().toLowerCase().endsWith(".rtpks")) {
+            path = path.resolveSibling(path.getFileName() + ".rtpks");
+        }
+        appendCurrentTilesToRtpks(path);
+    }
+
+    public void appendCurrentTilesToRtpks(Path rtpksPath) {
+        ResortTilesetBinding binding = handler.getResortTilesetBinding();
+        if (binding != null && binding.getRtpksPath() != null
+                && ResortTilesetWorkflow.normalizeRtpksPath(binding.getRtpksPath().toString())
+                .equals(ResortTilesetWorkflow.normalizeRtpksPath(rtpksPath.toString()))) {
+            int confirm = JOptionPane.showConfirmDialog(mainFrame,
+                    "The current tileset is already loaded from this RTPKS.\n"
+                            + "If you added tiles in the editor, use Save Current Tileset as RTPKS instead.\n\n"
+                            + "Append anyway? This will duplicate every current tile at the end of the pack.",
+                    "Append to RTPKS",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        try {
+            RtpksAppender.AppendResult result = RtpksAppender.append(
+                    rtpksPath,
+                    handler.getTileset(),
+                    captureTilesetThumbnail());
+
+            openRtpks(rtpksPath);
+
+            StringBuilder message = new StringBuilder();
+            message.append("Appended ").append(result.appendedCount()).append(" tile(s) to:\n")
+                    .append(rtpksPath).append("\n\n");
+            message.append("Pack now has ").append(result.mergedTileCount).append(" tile(s).\n");
+            message.append("New tiles use local indices ")
+                    .append(result.priorTileCount)
+                    .append("–")
+                    .append(result.mergedTileCount - 1)
+                    .append(".\n\n");
+            message.append("Resort tile IDs assigned:\n");
+            for (RtpksAppender.AppendedTileMapping mapping : result.appendedTiles) {
+                message.append("  local ")
+                        .append(mapping.localIndex)
+                        .append(" → resortTileId ")
+                        .append(mapping.resortTileId)
+                        .append('\n');
+            }
+
+            JOptionPane.showMessageDialog(mainFrame,
+                    message.toString(),
+                    "Append to RTPKS",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(mainFrame,
+                    ex.getMessage(),
+                    "Error appending to RTPKS",
+                    JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     public void saveTilesetAsRtpks(Path rtpksPath) {
